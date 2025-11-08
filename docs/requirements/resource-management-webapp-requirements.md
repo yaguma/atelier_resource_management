@@ -40,8 +40,9 @@
 #### 制約要件
 
 - **WRREQ-007**: システムは開発環境でローカルホストで動作しなければならない 🔴 *開発効率のため*
-- **WRREQ-008**: システムのフロントエンドはVercelにデプロイ可能でなければならない 🟡 *Next.jsのベストプラクティスから*
-- **WRREQ-008-1**: システムのバックエンドAPIはCloudflare WorkersまたはVercel Edge Functionsにデプロイ可能でなければならない 🟡 *Hono.jsのベストプラクティスから*
+- **WRREQ-008**: システムのフロントエンドはAzure App Serviceにデプロイ可能でなければならない 🟡 *エンタープライズ環境での運用のため*
+- **WRREQ-008-1**: システムのバックエンドAPIはAzure App Serviceにデプロイ可能でなければならない 🟡 *フロントエンドと統一した運用環境のため*
+- **WRREQ-008-2**: システムはAzure Database for PostgreSQLを使用できなければならない 🟡 *Azure環境でのデータベース運用のため*
 
 ---
 
@@ -298,8 +299,9 @@
 
 - フロントエンド: Next.js 14以上、TypeScript 5.0以上、Node.js 18以上
 - バックエンド: Hono.js 4.0以上、TypeScript 5.0以上、Node.js 18以上
-- データベース: PostgreSQL 14以上
+- データベース: PostgreSQL 14以上（開発環境）、Azure Database for PostgreSQL（本番環境）
 - ORM: Prisma 5.0以上
+- デプロイ環境: Azure App Service（フロントエンド・バックエンド共通）
 
 ### ビジネス制約
 
@@ -311,8 +313,9 @@
 - フロントエンド: サーバーサイドレンダリング(SSR)とクライアントサイドレンダリング(CSR)の適切な使い分け
 - バックエンド: RESTful API設計原則の遵守、Hono.jsのミドルウェア活用
 - データベースマイグレーションの管理(Prisma Migrate)
-- 環境変数による設定管理
+- 環境変数による設定管理（Azure App Serviceのアプリケーション設定を活用）
 - フロントエンドとバックエンドの明確な分離
+- Azure App Serviceのデプロイスロット機能を活用したステージング環境の構築
 
 ---
 
@@ -320,7 +323,7 @@
 
 ### Must Have(必須 - MVP範囲)
 
-- WRREQ-001〜008-1(プラットフォーム基盤、Hono.jsバックエンド含む)
+- WRREQ-001〜008-2(プラットフォーム基盤、Hono.jsバックエンド、Azure App Service含む)
 - WRREQ-012〜018(カード管理機能)
 - WRREQ-021〜026(顧客管理機能)
 - WRREQ-029〜031(錬金スタイル管理機能)
@@ -385,7 +388,12 @@
 5. 検索・フィルタリング機能強化
 6. UI/UXブラッシュアップ
 7. テスト実装(バックエンド・フロントエンド)
-8. デプロイ設定(Vercel + Cloudflare Workers/Vercel Edge Functions)
+8. Azure環境構築とデプロイ設定
+   - Azure App Service作成(フロントエンド・バックエンド各1つ)
+   - Azure Database for PostgreSQL構築
+   - デプロイスロット設定(本番・ステージング)
+   - 環境変数・アプリケーション設定
+   - CI/CDパイプライン構築(GitHub Actions)
 
 ### Phase 3: 拡張機能 (継続的)
 
@@ -402,3 +410,4 @@
 |------|----------|---------|
 | 2025-11-08 | 1.0 | 初版作成 |
 | 2025-11-08 | 1.1 | バックエンドをHono.jsに変更。フロントエンド(Next.js)とバックエンド(Hono.js)を明確に分離。API要件、技術的制約、開発フェーズを更新 |
+| 2025-11-08 | 1.2 | デプロイ先をAzure App Serviceに変更。Azure Database for PostgreSQL追加。デプロイスロット、CI/CD設定を開発フェーズに追加 |
