@@ -7,7 +7,7 @@
 **目的**: ゲームバランス調整、データ管理、コンテンツ追加を容易にする
 **対象ユーザー**: ゲーム開発者、ゲームデザイナー
 **技術スタック**:
-- フロントエンド: Next.js 14+ (App Router) + TypeScript + TailwindCSS
+- フロントエンド: React 18+ + Vite + TypeScript + TailwindCSS + React Router
 - バックエンド: Hono.js + TypeScript + Prisma + PostgreSQL
 
 ## 関連文書
@@ -29,8 +29,10 @@
 
 #### 通常要件
 
-- **WRREQ-001**: システムのフロントエンドはNext.js 14以上(App Router)で開発されなければならない 🟡 *モダンなWeb開発のベストプラクティスから*
+- **WRREQ-001**: システムのフロントエンドはReact 18以上で開発されなければならない 🟡 *モダンなWeb開発のベストプラクティスから*
 - **WRREQ-001-1**: システムのバックエンドはHono.jsで開発されなければならない 🟡 *軽量高速なAPIフレームワークのため*
+- **WRREQ-001-2**: システムのフロントエンドはViteをビルドツールとして使用しなければならない 🟡 *高速な開発体験のため*
+- **WRREQ-001-3**: システムのフロントエンドはReact Routerをルーティングライブラリとして使用しなければならない 🟡 *SPAのルーティング管理のため*
 - **WRREQ-002**: システムはTypeScriptで型安全に実装されなければならない 🟡 *保守性・品質向上のため*
 - **WRREQ-003**: システムはPostgreSQLをデータベースとして使用しなければならない 🟡 *リレーショナルデータの管理に適している*
 - **WRREQ-004**: システムはPrismaをORMとして使用しなければならない 🟡 *型安全なDB操作のため*
@@ -297,7 +299,7 @@
 
 ### 技術的制約
 
-- フロントエンド: Next.js 14以上、TypeScript 5.0以上、Node.js 18以上
+- フロントエンド: React 18以上、Vite 5.0以上、TypeScript 5.0以上、Node.js 18以上、React Router 6以上
 - バックエンド: Hono.js 4.0以上、TypeScript 5.0以上、Node.js 18以上
 - データベース: PostgreSQL 14以上（開発環境）、Azure Database for PostgreSQL（本番環境）
 - ORM: Prisma 5.0以上
@@ -310,11 +312,11 @@
 
 ### 設計制約
 
-- フロントエンド: サーバーサイドレンダリング(SSR)とクライアントサイドレンダリング(CSR)の適切な使い分け
+- フロントエンド: SPA(シングルページアプリケーション)アーキテクチャ、React Routerによるクライアントサイドルーティング
 - バックエンド: RESTful API設計原則の遵守、Hono.jsのミドルウェア活用
 - データベースマイグレーションの管理(Prisma Migrate)
 - 環境変数による設定管理（Azure App Serviceのアプリケーション設定を活用）
-- フロントエンドとバックエンドの明確な分離
+- フロントエンドとバックエンドの完全な分離（独立したデプロイ・スケーリング）
 - Azure App Serviceのデプロイスロット機能を活用したステージング環境の構築
 
 ---
@@ -323,7 +325,7 @@
 
 ### Must Have(必須 - MVP範囲)
 
-- WRREQ-001〜008-2(プラットフォーム基盤、Hono.jsバックエンド、Azure App Service含む)
+- WRREQ-001〜008-2(プラットフォーム基盤、React+Vite、Hono.js、Azure App Service含む)
 - WRREQ-012〜018(カード管理機能)
 - WRREQ-021〜026(顧客管理機能)
 - WRREQ-029〜031(錬金スタイル管理機能)
@@ -364,7 +366,7 @@
 ### Phase 1: MVP (1〜2週間)
 
 1. プロジェクトセットアップ
-   - フロントエンド: Next.js 14+ (App Router) + TypeScript + TailwindCSS
+   - フロントエンド: React 18+ + Vite + TypeScript + TailwindCSS + React Router
    - バックエンド: Hono.js + TypeScript + Prisma + PostgreSQL
    - 開発環境構築(ローカルDB、環境変数設定)
 2. データベーススキーマ設計・マイグレーション(Prisma)
@@ -374,9 +376,11 @@
    - 顧客管理API(CRUD)
    - CORS設定、バリデーション、エラーハンドリング
 4. フロントエンド実装
+   - React Routerルーティング設定
    - カード管理画面(CRUD)
    - 顧客管理画面(CRUD)
    - 基本的なUI/UX(ダッシュボード、ナビゲーション)
+   - APIクライアント実装(Axios/Fetch)
 5. JSONエクスポート/インポート機能
 
 ### Phase 2: 正式リリース準備 (2〜3週間)
@@ -411,3 +415,4 @@
 | 2025-11-08 | 1.0 | 初版作成 |
 | 2025-11-08 | 1.1 | バックエンドをHono.jsに変更。フロントエンド(Next.js)とバックエンド(Hono.js)を明確に分離。API要件、技術的制約、開発フェーズを更新 |
 | 2025-11-08 | 1.2 | デプロイ先をAzure App Serviceに変更。Azure Database for PostgreSQL追加。デプロイスロット、CI/CD設定を開発フェーズに追加 |
+| 2025-11-08 | 1.3 | フロントエンドをNext.jsからReact+Viteに変更。SPA構成、React Router追加。SSR/CSR記述を削除し、SPAアーキテクチャに統一 |
