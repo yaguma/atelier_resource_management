@@ -6,7 +6,7 @@
 resource-management-webapp
 
 ### 期間・目標
-- **期間**: 8営業日（Week 2-3）
+- **期間**: 8営業日（Week 3）
 - **総工数**: 64時間
 - **タスク数**: 12タスク
 - **目標**: カード管理APIと顧客管理APIの実装
@@ -22,7 +22,7 @@ resource-management-webapp
 
 ## 週次計画
 
-### Week 2（Day 11-15）: カード管理API実装
+### Week 3（Day 11-15）: カード管理API実装
 **目標**: カード管理APIの全CRUDエンドポイントを実装する
 
 **成果物**:
@@ -32,7 +32,7 @@ resource-management-webapp
 - カード削除エンドポイント（DELETE /api/cards/:id）
 - 依存関係チェック機能
 
-### Week 3（Day 16-20）: 顧客管理API実装
+### Week 3（Day 16-18）: 顧客管理API実装
 **目標**: 顧客管理APIの全CRUDエンドポイントを実装する
 
 **成果物**:
@@ -55,24 +55,11 @@ resource-management-webapp
 - **依存タスク**: TASK-0005, TASK-0007, TASK-0009, TASK-0012, TASK-0013
 
 **実装詳細**:
-1. `src/routes/cards.ts`作成
-   - GET /api/cards エンドポイント実装
-   - ページネーション対応（page, limit）
-   - フィルタリング対応（cardType, search）
-
-2. `src/controllers/cardController.ts`作成
-   - listCards関数実装
-   - Prisma findManyでカード一覧取得
-   - ソフトデリート対応（deletedAt IS NULL）
-
-3. `src/types/card.ts`作成
-   - CardTypeスキーマ定義（Zod）
-   - CardRarityスキーマ定義（Zod）
-   - listCardsQueryスキーマ定義（Zod）
-
-4. ルート統合
-   - `src/routes/index.ts`にカードルート追加
-   - `/api/cards`パスでマウント
+1. `src/routes/cards.ts`、`src/controllers/cardController.ts`、`src/types/card.ts`作成
+2. GET /api/cards エンドポイント実装（ページネーション: page, limit / フィルタリング: cardType, search）
+3. Prisma findManyでカード一覧取得（ソフトデリート対応）
+4. Zodスキーマ定義（CardType, CardRarity, listCardsQuery）
+5. `/api/cards`パスでルート統合
 
 **完了条件**:
 - [ ] GET /api/cards が動作する
@@ -81,12 +68,7 @@ resource-management-webapp
 - [ ] レスポンスに total, page, limit, totalPages が含まれる
 - [ ] 削除済みカード（deletedAt != NULL）が除外される
 
-**テスト要件**:
-- [ ] パラメータなしで全カード取得できる
-- [ ] cardType指定でフィルタリングできる
-- [ ] search指定で名前部分一致検索できる
-- [ ] ページネーションが正しく動作する
-- [ ] 削除済みカードが除外される
+**テスト要件**: パラメータなしで全カード取得、cardType/searchフィルタリング、ページネーション、削除済みカード除外を確認
 
 ---
 
@@ -99,20 +81,9 @@ resource-management-webapp
 - **依存タスク**: TASK-0016
 
 **実装詳細**:
-1. GET /api/cards/:id エンドポイント実装
-   - パスパラメータからID取得
-   - UUID検証
-
-2. `src/controllers/cardController.ts`に追加
-   - getCardById関数実装
-   - Prisma findUniqueでカード取得
-   - リレーションデータ含める（evolutionFrom, evolutionTo, initialDeckStyles, unlockableContent）
-   - 404エラーハンドリング
-
-3. UUID検証ミドルウェア作成
-   - `src/middlewares/validateUUID.ts`
-   - パラメータのUUID形式チェック
-   - 不正な場合400エラー
+1. GET /api/cards/:id エンドポイント実装（UUID検証、パスパラメータからID取得）
+2. `src/controllers/cardController.ts`にgetCardById関数追加（Prisma findUnique、リレーションデータ含む、404エラーハンドリング）
+3. `src/middlewares/validateUUID.ts`作成（UUID形式チェック、不正時400エラー）
 
 **完了条件**:
 - [ ] GET /api/cards/:id が動作する
@@ -121,12 +92,7 @@ resource-management-webapp
 - [ ] 不正なUUID形式で400エラーが返る
 - [ ] リレーションデータ（evolutionFrom, evolutionTo等）が含まれる
 
-**テスト要件**:
-- [ ] 正常なUUIDで詳細取得できる
-- [ ] 存在しないUUIDで404エラーが返る
-- [ ] 不正なUUID形式で400エラーが返る
-- [ ] 削除済みカードで404エラーが返る
-- [ ] レスポンスに全フィールドが含まれる
+**テスト要件**: 正常UUID詳細取得、不正/存在しないUUIDで400/404エラー、削除済みカード除外、リレーションデータ含有を確認
 
 ---
 
@@ -139,28 +105,9 @@ resource-management-webapp
 - **依存タスク**: TASK-0016, TASK-0017
 
 **実装詳細**:
-1. POST /api/cards エンドポイント実装
-   - リクエストボディ受け取り
-   - バリデーションミドルウェア適用
-
-2. `src/types/card.ts`に追加
-   - createCardSchemaスキーマ定義（Zod）
-     - name: string（必須、1〜100文字）
-     - description: string（必須、1〜1000文字）
-     - cardType: enum（必須、MATERIAL|OPERATION|CATALYST|KNOWLEDGE|SPECIAL|ARTIFACT）
-     - attribute: object（必須、JSON形式）
-     - stabilityValue: number（必須、-100〜100）
-     - reactionEffect: string（任意、最大500文字）
-     - energyCost: number（必須、0〜5）
-     - imageUrl: string（任意、最大500文字、URL形式）
-     - rarity: enum（任意、COMMON|UNCOMMON|RARE|EPIC|LEGENDARY）
-     - evolutionFromId: UUID（任意）
-
-3. `src/controllers/cardController.ts`に追加
-   - createCard関数実装
-   - Prisma createでカード作成
-   - ユニーク制約違反（同名カード）ハンドリング（409エラー）
-   - evolutionFromId存在チェック
+1. POST /api/cards エンドポイント実装（リクエストボディ、バリデーションミドルウェア適用）
+2. `src/types/card.ts`にcreateCardSchema追加（name, description, cardType, attribute, stabilityValue, energyCost, imageUrl, rarity, evolutionFromId等のZodスキーマ定義）
+3. `src/controllers/cardController.ts`にcreateCard関数追加（Prisma create、ユニーク制約違反で409エラー、evolutionFromId存在チェック）
 
 **完了条件**:
 - [ ] POST /api/cards が動作する
@@ -169,13 +116,7 @@ resource-management-webapp
 - [ ] 同名カード存在時に409エラーが返る
 - [ ] 201 Createdステータスが返る
 
-**テスト要件**:
-- [ ] 必須フィールドのみでカード作成できる
-- [ ] 全フィールド指定でカード作成できる
-- [ ] 同名カード作成時に409エラーが返る
-- [ ] energyCost範囲外（-1, 6）でバリデーションエラーが返る
-- [ ] stabilityValue範囲外でバリデーションエラーが返る
-- [ ] 存在しないevolutionFromIdで400エラーが返る
+**テスト要件**: 必須/全フィールド作成、同名カード409エラー、energyCost/stabilityValue範囲外バリデーション、存在しないevolutionFromIdで400エラーを確認
 
 ---
 
@@ -188,20 +129,9 @@ resource-management-webapp
 - **依存タスク**: TASK-0018
 
 **実装詳細**:
-1. PUT /api/cards/:id エンドポイント実装
-   - パスパラメータからID取得
-   - リクエストボディ受け取り
-   - 部分更新対応（Partial<CardSchema>）
-
-2. `src/types/card.ts`に追加
-   - updateCardSchemaスキーマ定義（Zod）
-   - createCardSchemaをpartial()で部分更新可能に
-
-3. `src/controllers/cardController.ts`に追加
-   - updateCard関数実装
-   - Prisma updateでカード更新
-   - 存在しないIDで404エラー
-   - ユニーク制約違反（同名カード）ハンドリング（409エラー）
+1. PUT /api/cards/:id エンドポイント実装（部分更新対応）
+2. `src/types/card.ts`にupdateCardSchema追加（createCardSchema.partial()で部分更新可能に）
+3. `src/controllers/cardController.ts`にupdateCard関数追加（Prisma update、404エラー、ユニーク制約違反で409エラー）
 
 **完了条件**:
 - [ ] PUT /api/cards/:id が動作する
@@ -210,13 +140,7 @@ resource-management-webapp
 - [ ] 存在しないIDで404エラーが返る
 - [ ] 同名カードに変更時に409エラーが返る
 
-**テスト要件**:
-- [ ] 1フィールドのみ更新できる
-- [ ] 複数フィールド更新できる
-- [ ] 全フィールド更新できる
-- [ ] 存在しないIDで404エラーが返る
-- [ ] 同名カードに変更時に409エラーが返る
-- [ ] バリデーションエラーが正しく返る
+**テスト要件**: 1フィールド/複数/全フィールド部分更新、存在しないIDで404、同名変更時409、バリデーションエラーを確認
 
 ---
 
@@ -248,11 +172,7 @@ resource-management-webapp
 - [ ] 報酬カードで使用中の場合、依存関係を返す
 - [ ] 依存関係がない場合、空配列を返す
 
-**テスト要件**:
-- [ ] 進化元として使用中のカードで依存関係を検出できる
-- [ ] 初期デッキで使用中のカードで依存関係を検出できる
-- [ ] 複数の依存関係を同時に検出できる
-- [ ] 依存関係がない場合、空配列が返る
+**テスト要件**: 進化元/初期デッキ/複数依存関係の検出、依存なし時の空配列を確認
 
 ---
 
@@ -281,12 +201,7 @@ resource-management-webapp
 - [ ] エラーレスポンスに依存関係詳細が含まれる
 - [ ] ソフトデリート（deletedAt設定）が動作する
 
-**テスト要件**:
-- [ ] 依存関係がないカードを削除できる
-- [ ] 削除後、GET /api/cardsで取得できない
-- [ ] 削除後、GET /api/cards/:idで404エラーが返る
-- [ ] 進化元として使用中のカードで409エラーが返る
-- [ ] 初期デッキで使用中のカードで409エラーが返る
+**テスト要件**: 依存なしカード削除成功、削除後一覧/詳細で非表示、進化元/初期デッキ使用中で409エラーを確認
 
 ---
 
@@ -325,16 +240,11 @@ resource-management-webapp
 - [ ] レスポンスに total, page, limit, totalPages が含まれる
 - [ ] 削除済み顧客（deletedAt != NULL）が除外される
 
-**テスト要件**:
-- [ ] パラメータなしで全顧客取得できる
-- [ ] difficulty指定でフィルタリングできる
-- [ ] search指定で名前部分一致検索できる
-- [ ] ページネーションが正しく動作する
-- [ ] 削除済み顧客が除外される
+**テスト要件**: パラメータなしで全顧客取得、difficulty/searchフィルタリング、ページネーション、削除済み顧客除外を確認
 
 ---
 
-### Day 17（8時間）: 顧客詳細取得API実装
+### Day 17（16時間）: 顧客詳細取得API・更新API実装
 
 #### ☑ TASK-0023: 顧客詳細取得API実装（GET /api/customers/:id）
 - **推定工数**: 8時間
@@ -364,16 +274,46 @@ resource-management-webapp
 - [ ] 不正なUUID形式で400エラーが返る
 - [ ] リレーションデータ（rewardCards）が含まれる
 
-**テスト要件**:
-- [ ] 正常なUUIDで詳細取得できる
-- [ ] 存在しないUUIDで404エラーが返る
-- [ ] 不正なUUID形式で400エラーが返る
-- [ ] 削除済み顧客で404エラーが返る
-- [ ] rewardCards配列が正しく含まれる
+**テスト要件**: 正常UUID詳細取得、不正/存在しないUUIDで400/404エラー、削除済み顧客除外、rewardCards配列含有を確認
 
 ---
 
-### Day 18（8時間）: 顧客作成API実装（N:Mリレーション対応）
+#### ☑ TASK-0025: 顧客更新API実装（PUT /api/customers/:id）
+- **推定工数**: 8時間
+- **タスクタイプ**: TDD
+- **要件へのリンク**: WRREQ-021, WRREQ-022, WRREQ-024, WRREQ-026
+- **依存タスク**: TASK-0024
+
+**実装詳細**:
+1. PUT /api/customers/:id エンドポイント実装
+   - パスパラメータからID取得
+   - リクエストボディ受け取り
+   - 部分更新対応（Partial<CustomerSchema>）
+
+2. `src/types/customer.ts`に追加
+   - updateCustomerSchemaスキーマ定義（Zod）
+   - createCustomerSchemaをpartial()で部分更新可能に
+
+3. `src/controllers/customerController.ts`に追加
+   - updateCustomer関数実装
+   - N:Mリレーション更新処理（rewardCardIds）
+     - 既存の関連を全て削除（disconnect）
+     - 新しい関連を追加（connect）
+   - Prisma update + set パターン使用
+   - 存在しないIDで404エラー
+
+**完了条件**:
+- [ ] PUT /api/customers/:id が動作する
+- [ ] 部分更新（一部フィールドのみ）が動作する
+- [ ] rewardCardIds更新が動作する
+- [ ] 存在しないIDで404エラーが返る
+- [ ] 存在しないrewardCardIdで400エラーが返る
+
+**テスト要件**: 1フィールド更新、rewardCardIds置換/空配列で全削除、存在しないIDで404/400エラーを確認
+
+---
+
+### Day 18（16時間）: 顧客作成API・削除API実装と統合テスト
 
 #### ☑ TASK-0024: 顧客作成API実装（POST /api/customers）
 - **推定工数**: 8時間
@@ -413,58 +353,9 @@ resource-management-webapp
 - [ ] バリデーションエラー時に400エラーが返る
 - [ ] 存在しないrewardCardIdで400エラーが返る
 
-**テスト要件**:
-- [ ] 必須フィールドのみで顧客作成できる
-- [ ] rewardCardIds指定で報酬カード関連付けできる
-- [ ] difficulty範囲外（0, 6）でバリデーションエラーが返る
-- [ ] 存在しないrewardCardIdで400エラーが返る
-- [ ] 作成後、GET /api/customers/:idでrewardCardsが取得できる
+**テスト要件**: 必須フィールド作成、rewardCardIds関連付け、difficulty範囲外バリデーション、存在しないIDで400エラー、作成後rewardCards取得を確認
 
 ---
-
-### Day 19（8時間）: 顧客更新API実装（N:Mリレーション対応）
-
-#### ☑ TASK-0025: 顧客更新API実装（PUT /api/customers/:id）
-- **推定工数**: 8時間
-- **タスクタイプ**: TDD
-- **要件へのリンク**: WRREQ-021, WRREQ-022, WRREQ-024, WRREQ-026
-- **依存タスク**: TASK-0024
-
-**実装詳細**:
-1. PUT /api/customers/:id エンドポイント実装
-   - パスパラメータからID取得
-   - リクエストボディ受け取り
-   - 部分更新対応（Partial<CustomerSchema>）
-
-2. `src/types/customer.ts`に追加
-   - updateCustomerSchemaスキーマ定義（Zod）
-   - createCustomerSchemaをpartial()で部分更新可能に
-
-3. `src/controllers/customerController.ts`に追加
-   - updateCustomer関数実装
-   - N:Mリレーション更新処理（rewardCardIds）
-     - 既存の関連を全て削除（disconnect）
-     - 新しい関連を追加（connect）
-   - Prisma update + set パターン使用
-   - 存在しないIDで404エラー
-
-**完了条件**:
-- [ ] PUT /api/customers/:id が動作する
-- [ ] 部分更新（一部フィールドのみ）が動作する
-- [ ] rewardCardIds更新が動作する
-- [ ] 存在しないIDで404エラーが返る
-- [ ] 存在しないrewardCardIdで400エラーが返る
-
-**テスト要件**:
-- [ ] 1フィールドのみ更新できる
-- [ ] rewardCardIds更新で関連が正しく置換される
-- [ ] rewardCardIds空配列で全関連削除できる
-- [ ] 存在しないIDで404エラーが返る
-- [ ] 存在しないrewardCardIdで400エラーが返る
-
----
-
-### Day 20（8時間）: 顧客削除API実装と統合テスト
 
 #### ☑ TASK-0026: 顧客削除API実装（DELETE /api/customers/:id）
 - **推定工数**: 4時間
@@ -489,11 +380,7 @@ resource-management-webapp
 - [ ] ソフトデリート（deletedAt設定）が動作する
 - [ ] 存在しないIDで404エラーが返る
 
-**テスト要件**:
-- [ ] 顧客を削除できる
-- [ ] 削除後、GET /api/customersで取得できない
-- [ ] 削除後、GET /api/customers/:idで404エラーが返る
-- [ ] N:M関連（rewardCards）も削除される
+**テスト要件**: 顧客削除成功、削除後一覧/詳細で非表示、N:M関連も削除を確認
 
 ---
 
@@ -504,43 +391,16 @@ resource-management-webapp
 - **依存タスク**: TASK-0016〜0026
 
 **実装詳細**:
-1. APIエンドポイント統合テスト実施
-   - Postman/Thunder Clientでマニュアルテスト
-   - 全エンドポイントの動作確認
-   - エラーケースの確認
+1. APIエンドポイント統合テスト実施（Postman/Thunder Client）
+   - カード管理フロー: 一覧→作成→詳細→更新→削除（依存チェック含む）
+   - 顧客管理フロー: 一覧→作成（N:M関連）→詳細→更新（関連変更）→削除
 
-2. テストシナリオ実行
-   - **カード管理フロー**:
-     1. カード一覧取得（空）
-     2. カード作成（3件）
-     3. カード一覧取得（3件表示）
-     4. カード詳細取得
-     5. カード更新
-     6. カード削除（依存関係なし）
-     7. カード削除（依存関係あり）→409エラー
+2. データ確認（Prisma Studio）
+   - カード/顧客テーブル、中間テーブル、deletedAtフィールド
 
-   - **顧客管理フロー**:
-     1. 顧客一覧取得（空）
-     2. 顧客作成（報酬カードあり）
-     3. 顧客一覧取得（表示確認）
-     4. 顧客詳細取得（rewardCards含む）
-     5. 顧客更新（報酬カード変更）
-     6. 顧客削除
+3. API仕様書確認（`docs/design/resource-management-webapp/api-endpoints.md`）
 
-3. Prisma Studioでデータ確認
-   - カードテーブル
-   - 顧客テーブル
-   - 中間テーブル（CustomerRewardCard）
-   - deletedAtフィールド
-
-4. API仕様書確認
-   - `docs/design/resource-management-webapp/api-endpoints.md`
-   - 実装と仕様の一致確認
-
-5. README.md更新
-   - Phase 2完了内容追記
-   - APIエンドポイント一覧追記
-   - サンプルリクエスト追記
+4. README.md更新（Phase 2完了内容、APIエンドポイント一覧）
 
 **完了条件**:
 - [ ] 全APIエンドポイントが正常に動作する
@@ -578,45 +438,11 @@ resource-management-webapp
 ## 備考
 
 ### N:Mリレーション処理パターン
-
-**作成時**:
-```typescript
-await prisma.customer.create({
-  data: {
-    name: "顧客名",
-    // ... 他のフィールド
-    rewardCards: {
-      connect: rewardCardIds.map(id => ({ id }))
-    }
-  }
-});
-```
-
-**更新時**:
-```typescript
-await prisma.customer.update({
-  where: { id },
-  data: {
-    // ... 他のフィールド
-    rewardCards: {
-      set: rewardCardIds.map(id => ({ id }))
-    }
-  }
-});
-```
+- **作成時**: `rewardCards: { connect: rewardCardIds.map(id => ({ id })) }`
+- **更新時**: `rewardCards: { set: rewardCardIds.map(id => ({ id })) }`
 
 ### 依存関係チェックパターン
-
-```typescript
-const dependencies = await checkCardDependencies(cardId);
-if (dependencies.length > 0) {
-  return errorResponse(c, 'DEPENDENCY_ERROR',
-    'このカードは他のリソースから参照されているため削除できません',
-    409,
-    dependencies
-  );
-}
-```
+`checkCardDependencies(cardId)`で依存関係を確認し、存在する場合は409エラーを返す
 
 ---
 

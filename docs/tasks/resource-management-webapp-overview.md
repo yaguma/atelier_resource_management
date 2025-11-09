@@ -25,10 +25,13 @@ resource-management-webapp
 
 | フェーズ | 期間（日） | 工数（時間） | タスク数 | 成果物 | ファイル |
 |---------|-----------|------------|---------|-------|---------|
-| **Phase 1** | 10日 | 80時間 | 15タスク | プロジェクト基盤・バックエンド基盤 | [phase1.md](./resource-management-webapp-phase1.md) |
+| **Phase 1-A** | 5日 | 40時間 | 7タスク | プロジェクト環境セットアップ | [phase1-a-setup.md](./resource-management-webapp-phase1-a-setup.md) |
+| **Phase 1-B** | 5日 | 40時間 | 8タスク | バックエンドミドルウェア基盤 | [phase1-b-middleware.md](./resource-management-webapp-phase1-b-middleware.md) |
 | **Phase 2** | 8日 | 64時間 | 12タスク | カード・顧客管理API | [phase2.md](./resource-management-webapp-phase2.md) |
-| **Phase 3** | 10日 | 80時間 | 15タスク | フロントエンド基盤・カード管理画面 | [phase3.md](./resource-management-webapp-phase3.md) |
-| **Phase 4** | 8日 | 64時間 | 13タスク | 顧客管理画面・錬金スタイル管理 | [phase4.md](./resource-management-webapp-phase4.md) |
+| **Phase 3-A** | 5日 | 40時間 | 10タスク | フロントエンド基盤構築 | [phase3-a-foundation.md](./resource-management-webapp-phase3-a-foundation.md) |
+| **Phase 3-B** | 5日 | 40時間 | 5タスク | カード管理画面実装 | [phase3-b-card-screens.md](./resource-management-webapp-phase3-b-card-screens.md) |
+| **Phase 4-A** | 5日 | 40時間 | 5タスク | 顧客管理画面実装 | [phase4-a-customer-screens.md](./resource-management-webapp-phase4-a-customer-screens.md) |
+| **Phase 4-B** | 3日 | 24時間 | 8タスク | 錬金スタイル管理API・画面 | [phase4-b-alchemy-style.md](./resource-management-webapp-phase4-b-alchemy-style.md) |
 | **Phase 5** | 6日 | 48時間 | 12タスク | データエクスポート/インポート・ダッシュボード | [phase5.md](./resource-management-webapp-phase5.md) |
 | **合計** | **42日** | **336時間** | **67タスク** | - | - |
 
@@ -137,17 +140,24 @@ TASK-0068
 
 ## フェーズ別詳細タスク
 
-### Phase 1: プロジェクト基盤構築とバックエンド基盤（80時間、15タスク）
-**目標**: プロジェクトの基盤を構築し、バックエンドの共通機能を実装する
+### Phase 1-A: プロジェクト環境セットアップ（40時間、7タスク）
+**目標**: プロジェクトの基盤環境を構築する
 
 **成果物**:
 - フロントエンド・バックエンドプロジェクト初期化
 - PostgreSQL環境（Docker Compose）
 - Prismaスキーマ・マイグレーション
+
+**詳細**: [resource-management-webapp-phase1-a-setup.md](./resource-management-webapp-phase1-a-setup.md)
+
+### Phase 1-B: バックエンドミドルウェア基盤（40時間、8タスク）
+**目標**: バックエンドの共通ミドルウェア・ユーティリティを実装する
+
+**成果物**:
 - 共通ミドルウェア（CORS、バリデーション、エラーハンドリング、ロギング）
 - 共通レスポンス型・ユーティリティ
 
-**詳細**: [resource-management-webapp-phase1.md](./resource-management-webapp-phase1.md)
+**詳細**: [resource-management-webapp-phase1-b-middleware.md](./resource-management-webapp-phase1-b-middleware.md)
 
 ---
 
@@ -164,31 +174,45 @@ TASK-0068
 
 ---
 
-### Phase 3: フロントエンド基盤とカード管理画面（80時間、15タスク）
-**目標**: フロントエンドの基盤を構築し、カード管理画面を実装する
+### Phase 3-A: フロントエンド基盤構築（40時間、10タスク）
+**目標**: フロントエンドの基盤を構築する
 
 **成果物**:
 - React Router設定
 - TanStack Query設定
 - Axiosクライアント設定
 - Zodバリデーションスキーマ
-- 共通コンポーネント（Button、Modal、Toast等）
-- レイアウトコンポーネント（Sidebar、Header等）
+- 共通コンポーネント（Button、Modal、Toast）
+- レイアウトコンポーネント（Sidebar、Header、Breadcrumbs）
+
+**詳細**: [resource-management-webapp-phase3-a-foundation.md](./resource-management-webapp-phase3-a-foundation.md)
+
+### Phase 3-B: カード管理画面実装（40時間、5タスク）
+**目標**: カード管理画面を実装する
+
+**成果物**:
 - カード管理画面（一覧・作成・編集・詳細・削除）
 
-**詳細**: [resource-management-webapp-phase3.md](./resource-management-webapp-phase3.md)
+**詳細**: [resource-management-webapp-phase3-b-card-screens.md](./resource-management-webapp-phase3-b-card-screens.md)
 
 ---
 
-### Phase 4: 顧客管理画面と錬金スタイル管理（64時間、13タスク）
-**目標**: 顧客管理画面と錬金スタイル管理機能を実装する
+### Phase 4-A: 顧客管理画面実装（40時間、5タスク）
+**目標**: 顧客管理画面を実装する
 
 **成果物**:
 - 顧客管理画面（一覧・作成・編集・詳細・削除）
+
+**詳細**: [resource-management-webapp-phase4-a-customer-screens.md](./resource-management-webapp-phase4-a-customer-screens.md)
+
+### Phase 4-B: 錬金スタイル管理（24時間、8タスク）
+**目標**: 錬金スタイル管理APIと画面を実装する
+
+**成果物**:
 - 錬金スタイル管理API
 - 錬金スタイル管理画面（一覧・作成・編集・詳細・削除）
 
-**詳細**: [resource-management-webapp-phase4.md](./resource-management-webapp-phase4.md)
+**詳細**: [resource-management-webapp-phase4-b-alchemy-style.md](./resource-management-webapp-phase4-b-alchemy-style.md)
 
 ---
 
@@ -248,3 +272,4 @@ graph TD
 | 日付 | バージョン | 変更内容 |
 |------|----------|---------|
 | 2025-11-09 | 1.0 | 初版作成。5フェーズ、67タスク |
+| 2025-11-09 | 1.1 | タスクファイル修正。Phase 1/3/4を分割（500行以下制約対応）、Phase 2/5を簡潔化、Day/Week番号を修正、フェーズ構成テーブルを更新 |
