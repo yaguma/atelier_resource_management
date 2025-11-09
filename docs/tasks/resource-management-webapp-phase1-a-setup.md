@@ -83,9 +83,26 @@ resource-management-webapp
    - src/（components/, pages/, hooks/, api/, types/, utils/）
    - components/（common/, layouts/, features/）
 
-6. ESLint・Prettier設定
+6. Biome.js設定
    ```bash
-   npm install -D eslint prettier eslint-config-prettier eslint-plugin-react
+   npm install -D @biomejs/biome
+   npx @biomejs/biome init
+   ```
+
+   `biome.json`設定内容:
+   - formatter: space indent (width: 2), single quote
+   - linter: recommended rules有効化
+   - TailwindCSS at-rules許可設定
+
+   `package.json`スクリプト追加:
+   ```json
+   {
+     "scripts": {
+       "lint": "biome check .",
+       "lint:fix": "biome check --write .",
+       "format": "biome format --write ."
+     }
+   }
    ```
 
 7. 環境変数設定（`.env.development`）
@@ -97,7 +114,7 @@ resource-management-webapp
 - [ ] `npm run dev`でVite開発サーバーが起動する
 - [ ] `http://localhost:5173`でReactアプリが表示される
 - [ ] TailwindCSSのスタイルが適用される
-- [ ] ESLint・Prettierが動作する
+- [ ] Biome.jsが動作する（`npm run lint`、`npm run format`）
 - [ ] ディレクトリ構造が整っている
 
 ---
@@ -433,7 +450,7 @@ resource-management-webapp
 - [ ] ディレクトリ構造が整っている
 
 ### 品質基準
-- [ ] ESLint・Prettierでコード整形されている
+- [ ] Biome.jsでコード整形されている
 - [ ] TypeScriptのコンパイルエラーがない
 - [ ] 環境変数ファイルが整備されている
 
