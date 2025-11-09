@@ -26,6 +26,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.4",
     "@tailwindcss/postcss": "^4.1.17",
+    "@tanstack/react-query-devtools": "^5.90.2",
     "@types/node": "^24.10.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
