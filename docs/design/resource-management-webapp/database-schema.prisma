@@ -1,0 +1,402 @@
+// ============================================
+// アトリエ錬金術ゲーム リソース管理Webアプリ
+// Prisma データベーススキーマ
+// ============================================
+
+// 🔵 Prisma クライアント設定
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 🔵 データベース接続設定
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 🔵 Enum定義
+// ============================================
+
+/// 🔵 カード系統（WRREQ-012より）
+enum CardType {
+  MATERIAL    // 素材
+  OPERATION   // 操作
+  CATALYST    // 触媒
+  KNOWLEDGE   // 知識
+  SPECIAL     // 特殊
+  ARTIFACT    // アーティファクト
+}
+
+/// 🟡 カードレア度
+enum CardRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+/// 🔵 ノードタイプ（WRREQ-033より）
+enum NodeType {
+  REQUEST       // 依頼
+  MERCHANT      // 商人
+  EXPERIMENT    // 実験
+  MONSTER       // 魔物
+  BOSS_REQUEST  // ボス依頼
+}
+
+/// 🔵 メタ通貨タイプ（WRREQ-038より）
+enum MetaCurrencyType {
+  FAME       // 名声
+  KNOWLEDGE  // 知識ポイント
+}
+
+/// 🔵 アンロック可能コンテンツタイプ（WRREQ-039より）
+enum UnlockableContentType {
+  CARD      // 新カード
+  CUSTOMER  // 新顧客
+  MATERIAL  // 新素材
+}
+
+/// 🔵 ゲームバランス設定カテゴリ（WRREQ-048〜051より）
+enum GameBalanceCategory {
+  ENERGY     // エネルギーシステム
+  HAND       // 手札システム
+  STABILITY  // 安定値・暴発
+  PLAYTIME   // プレイ時間
+}
+
+// ============================================
+// 🔵 エンティティ定義
+// ============================================
+
+/// 🔵 1. Card（カード）モデル
+/// WRREQ-012〜018より
+model Card {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 カード固有フィールド
+  name            String      @unique @db.VarChar(100) // 🔵 カード名（ユニーク）
+  description     String      @db.VarChar(1000) // 🔵 説明
+  cardType        CardType // 🔵 カード系統
+  attribute       Json // 🔵 属性値（JSON形式）
+  stabilityValue  Int // 🔵 安定値（-100〜100）
+  reactionEffect  String?     @db.VarChar(500) // 🔵 反応効果
+  energyCost      Int // 🔵 エネルギーコスト（0〜5）
+  imageUrl        String?     @db.VarChar(500) // 🟡 カード画像URL
+  rarity          CardRarity? // 🟡 レア度
+
+  // 🔵 リレーション: 進化関係（1:1, 1:N）
+  evolutionFromId String? @db.Uuid
+  evolutionFrom   Card?   @relation("CardEvolution", fields: [evolutionFromId], references: [id], onDelete: SetNull)
+  evolutionTo     Card[]  @relation("CardEvolution")
+
+  // 🔵 リレーション: 錬金スタイルの初期デッキ（N:M）
+  initialDeckStyles AlchemyStyle[] @relation("AlchemyStyleInitialDeck")
+
+  // 🔵 リレーション: アンロック条件（1:1）
+  unlockableContent UnlockableContent?
+
+  // 🔵 リレーション: 顧客の報酬カード（N:M）
+  rewardCustomers Customer[] @relation("CustomerRewardCards")
+
+  // 🟡 インデックス
+  @@index([cardType])
+  @@index([energyCost])
+  @@index([deletedAt])
+  @@map("cards")
+}
+
+/// 🔵 2. Customer（顧客）モデル
+/// WRREQ-021〜028より
+model Customer {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 顧客固有フィールド
+  name                String  @db.VarChar(100) // 🔵 顧客名
+  description         String  @db.VarChar(1000) // 🔵 説明
+  customerType        String  @db.VarChar(50) // 🔵 顧客タイプ
+  difficulty          Int // 🔵 難易度（1〜5星）
+  requiredAttribute   Json // 🔵 必要属性値（JSON形式）
+  qualityCondition    Int // 🔵 品質条件（0〜100）
+  stabilityCondition  Int // 🔵 安定性条件（0〜100）
+  rewardFame          Int // 🔵 報酬: 名声（0〜1000）
+  rewardKnowledge     Int // 🔵 報酬: 知識ポイント（0〜1000）
+  portraitUrl         String? @db.VarChar(500) // 🟡 顧客ポートレートURL
+
+  // 🔵 リレーション: 報酬カード（N:M）
+  rewardCards Card[] @relation("CustomerRewardCards")
+
+  // 🔵 リレーション: マップノード（1:N）
+  mapNodes MapNode[]
+
+  // 🔵 リレーション: アンロック条件（1:1）
+  unlockableContent UnlockableContent?
+
+  // 🟡 インデックス
+  @@index([customerType])
+  @@index([difficulty])
+  @@index([deletedAt])
+  @@map("customers")
+}
+
+/// 🔵 3. AlchemyStyle（錬金スタイル）モデル
+/// WRREQ-029〜032より
+model AlchemyStyle {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 錬金スタイル固有フィールド
+  name            String  @unique @db.VarChar(100) // 🔵 スタイル名（ユニーク）
+  description     String  @db.VarChar(1000) // 🔵 説明
+  characteristics String  @db.VarChar(500) // 🔵 特徴
+  iconUrl         String? @db.VarChar(500) // 🟡 アイコンURL
+
+  // 🔵 リレーション: 初期デッキのカード（N:M）
+  initialDeckCards Card[] @relation("AlchemyStyleInitialDeck")
+
+  // 🟡 インデックス
+  @@index([deletedAt])
+  @@map("alchemy_styles")
+}
+
+/// 🔵 4. MapNode（マップノード）モデル
+/// WRREQ-033〜037より
+model MapNode {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 マップノード固有フィールド
+  name         String   @db.VarChar(100) // 🔵 ノード名
+  nodeType     NodeType // 🔵 ノードタイプ
+  description  String   @db.VarChar(1000) // 🔵 説明
+  eventContent Json // 🔵 イベント内容（JSON形式）
+  rewards      Json? // 🔵 報酬（JSON形式）
+  iconUrl      String?  @db.VarChar(500) // 🟡 アイコンURL
+
+  // 🔵 リレーション: 顧客（N:1）
+  customerId String?   @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // 🟡 インデックス
+  @@index([nodeType])
+  @@index([customerId])
+  @@index([deletedAt])
+  @@map("map_nodes")
+}
+
+/// 🔵 5. MetaCurrency（メタ通貨）モデル
+/// WRREQ-038より
+model MetaCurrency {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 メタ通貨固有フィールド
+  currencyType MetaCurrencyType @unique // 🔵 通貨タイプ（ユニーク）
+  description  String           @db.VarChar(500) // 🔵 説明
+  iconUrl      String?          @db.VarChar(500) // 🟡 アイコンURL
+
+  // 🟡 インデックス
+  @@index([deletedAt])
+  @@map("meta_currencies")
+}
+
+/// 🔵 6. UnlockableContent（アンロック可能コンテンツ）モデル
+/// WRREQ-039〜040より
+model UnlockableContent {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 アンロック可能コンテンツ固有フィールド
+  contentType        UnlockableContentType // 🔵 コンテンツタイプ
+  requiredFame       Int                   @default(0) // 🔵 必要名声（0〜10000）
+  requiredKnowledge  Int                   @default(0) // 🔵 必要知識ポイント（0〜10000）
+
+  // 🔵 リレーション: アンロック対象カード（1:1）
+  cardId   String? @unique @db.Uuid
+  card     Card?   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  // 🔵 リレーション: アンロック対象顧客（1:1）
+  customerId String?   @unique @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // 🟡 インデックス
+  @@index([contentType])
+  @@index([deletedAt])
+  @@map("unlockable_contents")
+}
+
+/// 🔵 7. GameBalance（ゲームバランス）モデル
+/// WRREQ-041〜042、WRREQ-048〜051より
+model GameBalance {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 ゲームバランス固有フィールド
+  settingKey   String              @unique @db.VarChar(100) // 🔵 設定キー（ユニーク）
+  settingValue String              @db.VarChar(500) // 🔵 設定値
+  description  String              @db.VarChar(500) // 🔵 説明
+  category     GameBalanceCategory // 🔵 カテゴリ
+
+  // 🟡 インデックス
+  @@index([category])
+  @@index([deletedAt])
+  @@map("game_balance")
+}
+
+// ============================================
+// 🔵 ER図（Mermaid記法）
+// ============================================
+//
+// ```mermaid
+// erDiagram
+//     CARD ||--o{ CARD : "進化関係"
+//     CARD }o--o{ ALCHEMY_STYLE : "初期デッキ"
+//     CARD ||--o| UNLOCKABLE_CONTENT : "アンロック条件"
+//     CARD }o--o{ CUSTOMER : "報酬"
+//     CUSTOMER ||--o{ MAP_NODE : "登場ノード"
+//     CUSTOMER ||--o| UNLOCKABLE_CONTENT : "アンロック条件"
+//
+//     CARD {
+//         uuid id PK
+//         string name UK
+//         enum cardType
+//         json attribute
+//         int stabilityValue
+//         int energyCost
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+//
+//     CUSTOMER {
+//         uuid id PK
+//         string name
+//         string customerType
+//         int difficulty
+//         json requiredAttribute
+//         int rewardFame
+//         int rewardKnowledge
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+//
+//     ALCHEMY_STYLE {
+//         uuid id PK
+//         string name UK
+//         string description
+//         string characteristics
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+//
+//     MAP_NODE {
+//         uuid id PK
+//         string name
+//         enum nodeType
+//         json eventContent
+//         uuid customerId FK
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+//
+//     UNLOCKABLE_CONTENT {
+//         uuid id PK
+//         enum contentType
+//         int requiredFame
+//         int requiredKnowledge
+//         uuid cardId FK
+//         uuid customerId FK
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+//
+//     GAME_BALANCE {
+//         uuid id PK
+//         string settingKey UK
+//         string settingValue
+//         enum category
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+//
+//     META_CURRENCY {
+//         uuid id PK
+//         enum currencyType UK
+//         string description
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+// ```
+
+// ============================================
+// 🔵 インデックス戦略
+// ============================================
+//
+// 1. 🔵 主キー（id）: 自動的にインデックス作成（UUID）
+// 2. 🔵 ユニーク制約: name（Card、AlchemyStyle）、settingKey（GameBalance）、currencyType（MetaCurrency）
+// 3. 🟡 検索・フィルタリング用インデックス:
+//    - Card: cardType, energyCost, deletedAt
+//    - Customer: customerType, difficulty, deletedAt
+//    - MapNode: nodeType, customerId, deletedAt
+//    - GameBalance: category, deletedAt
+//    - UnlockableContent: contentType, deletedAt
+// 4. 🟡 外部キーインデックス: 自動的に作成（customerId等）
+//
+// ============================================
+// 🔵 ソフトデリート戦略
+// ============================================
+//
+// - 全エンティティに`deletedAt`フィールドを追加
+// - DELETE操作時は`deletedAt`に現在時刻を設定
+// - SELECT時は`deletedAt IS NULL`でフィルタリング
+// - Prismaミドルウェアでソフトデリートを実装
+//
+// ============================================
+// 🔵 マイグレーション
+// ============================================
+//
+// 初回マイグレーション:
+// ```bash
+// npx prisma migrate dev --name init
+// ```
+//
+// マイグレーション適用:
+// ```bash
+// npx prisma migrate deploy
+// ```
+//
+// Prisma Studio起動:
+// ```bash
+// npx prisma studio
+// ```
