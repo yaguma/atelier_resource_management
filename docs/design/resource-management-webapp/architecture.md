@@ -247,14 +247,79 @@ backend/
 - **🟡 開発環境**: HTTP（localhost）
 - **🔴 本番環境**: Azure App ServiceのHTTPS強制有効化
 
-### 🔴 CORS設定
-- **🔴 許可オリジン**: フロントエンドのデプロイURL（Azure App Service URL）
-- **🔴 許可メソッド**: GET、POST、PUT、DELETE
-- **🔴 許可ヘッダー**: Content-Type、Authorization（将来的）
+### 🔴 CORS設定（詳細）
+
+#### 🔵 環境別CORS設定
+
+**開発環境**:
+```typescript
+cors({
+  origin: 'http://localhost:5173',
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposeHeaders: ['X-Total-Count', 'X-Page', 'X-Limit'],
+  maxAge: 86400, // 24時間
+})
+```
+
+**本番環境**:
+```typescript
+cors({
+  origin: process.env.CORS_ORIGIN || 'https://atelier-mgmt-frontend.azurewebsites.net',
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposeHeaders: ['X-Total-Count', 'X-Page', 'X-Limit'],
+  maxAge: 86400,
+})
+```
+
+#### 🔵 CORS設定項目の詳細
+
+| 項目 | 開発環境 | 本番環境 | 説明 |
+|------|---------|---------|------|
+| **origin** | `http://localhost:5173` | `https://atelier-mgmt-frontend.azurewebsites.net` | 許可するオリジン（環境変数で設定） |
+| **credentials** | `true` | `true` | Cookie・認証情報の送信を許可 |
+| **allowMethods** | GET, POST, PUT, DELETE, OPTIONS | GET, POST, PUT, DELETE, OPTIONS | 許可するHTTPメソッド |
+| **allowHeaders** | Content-Type, Authorization, X-Requested-With | Content-Type, Authorization, X-Requested-With | 許可するリクエストヘッダー |
+| **exposeHeaders** | X-Total-Count, X-Page, X-Limit | X-Total-Count, X-Page, X-Limit | クライアントに公開するレスポンスヘッダー |
+| **maxAge** | 86400 (24時間) | 86400 (24時間) | プリフライトリクエストのキャッシュ時間 |
+
+#### 🔵 複数オリジン対応（将来的）
+
+```typescript
+// 複数のオリジンを許可する場合
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://atelier-mgmt-frontend.azurewebsites.net',
+  'https://atelier-mgmt-frontend-staging.azurewebsites.net',
+];
+
+cors({
+  origin: (origin) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return origin;
+    }
+    throw new HTTPException(403, { message: 'CORS policy violation' });
+  },
+  credentials: true,
+  // ...
+})
+```
+
+#### 🔴 セキュリティ注意事項
+
+- **🔴 ワイルドカード禁止**: `origin: '*'`は本番環境では絶対に使用しない
+- **🔴 環境変数管理**: オリジンURLは環境変数で管理し、ハードコードしない
+- **🔴 credentials使用時の制限**: `credentials: true`の場合、`origin: '*'`は使用不可
+- **🔴 プリフライトリクエスト**: OPTIONSメソッドを許可し、適切に処理
 
 ### 🔴 環境変数管理
 - **🔴 開発環境**: `.env`ファイル（`.gitignore`に追加）
 - **🔴 本番環境**: Azure App Serviceのアプリケーション設定
+- **📄 詳細**: [environment-variables.md](./environment-variables.md) を参照
 
 ---
 
