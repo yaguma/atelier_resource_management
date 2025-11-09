@@ -45,10 +45,12 @@
 - **🔵 ビルドツール**: Vite 5.0+（要件WRREQ-001-2より）
 - **🔵 言語**: TypeScript 5.0+（要件WRREQ-002より）
 - **🔵 スタイリング**: TailwindCSS（要件WRREQ-005より）
+- **🟡 UIコンポーネント**: shadcn/ui（TailwindCSSベースのコンポーネントライブラリ）
 - **🔵 ルーティング**: React Router 6+（要件WRREQ-001-3より）
 - **🔵 サーバー状態管理**: TanStack Query (React Query) 5.0+（要件WRREQ-001-4より）
 - **🔵 バリデーション**: Zod 3.0+（要件WRREQ-001-5より）
 - **🔵 HTTPクライアント**: Axios 1.6+（要件WRREQ-001-6より）
+- **🟡 フォーム管理**: React Hook Form 7+（フォーム状態管理とバリデーション）
 
 #### 状態管理戦略
 - **🔵 サーバー状態**: TanStack Query（データフェッチ、キャッシング、同期）

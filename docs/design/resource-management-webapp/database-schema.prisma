@@ -193,14 +193,47 @@ model MapNode {
   customerId String?   @db.Uuid
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
+  // 🔵 リレーション: マップテンプレート（N:1）
+  mapTemplateId String?      @db.Uuid
+  mapTemplate   MapTemplate? @relation(fields: [mapTemplateId], references: [id], onDelete: SetNull)
+
+  // 🟡 ノードの座標位置（JSON形式: {x: number, y: number}）
+  position Json?
+
   // 🟡 インデックス
   @@index([nodeType])
   @@index([customerId])
+  @@index([mapTemplateId])
   @@index([deletedAt])
   @@map("map_nodes")
 }
 
-/// 🔵 5. MetaCurrency（メタ通貨）モデル
+/// 🔵 5. MapTemplate（マップテンプレート）モデル
+/// WRREQ-035〜036より
+model MapTemplate {
+  // 🔵 共通フィールド
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  // 🔵 マップテンプレート固有フィールド
+  name        String @db.VarChar(100) // 🔵 マップ名
+  description String @db.VarChar(1000) // 🔵 説明
+  difficulty  Int // 🔵 難易度（1〜5）
+  nodeCount   Int // 🔵 ノード数（30〜50）
+  iconUrl     String? @db.VarChar(500) // 🟡 アイコンURL
+
+  // 🔵 リレーション: このテンプレートに含まれるノード（1:N）
+  nodes MapNode[]
+
+  // 🟡 インデックス
+  @@index([difficulty])
+  @@index([deletedAt])
+  @@map("map_templates")
+}
+
+/// 🔵 6. MetaCurrency（メタ通貨）モデル
 /// WRREQ-038より
 model MetaCurrency {
   // 🔵 共通フィールド
@@ -219,7 +252,7 @@ model MetaCurrency {
   @@map("meta_currencies")
 }
 
-/// 🔵 6. UnlockableContent（アンロック可能コンテンツ）モデル
+/// 🔵 7. UnlockableContent（アンロック可能コンテンツ）モデル
 /// WRREQ-039〜040より
 model UnlockableContent {
   // 🔵 共通フィールド
@@ -247,7 +280,7 @@ model UnlockableContent {
   @@map("unlockable_contents")
 }
 
-/// 🔵 7. GameBalance（ゲームバランス）モデル
+/// 🔵 8. GameBalance（ゲームバランス）モデル
 /// WRREQ-041〜042、WRREQ-048〜051より
 model GameBalance {
   // 🔵 共通フィールド
@@ -280,6 +313,7 @@ model GameBalance {
 //     CARD }o--o{ CUSTOMER : "報酬"
 //     CUSTOMER ||--o{ MAP_NODE : "登場ノード"
 //     CUSTOMER ||--o| UNLOCKABLE_CONTENT : "アンロック条件"
+//     MAP_TEMPLATE ||--o{ MAP_NODE : "ノード配置"
 //
 //     CARD {
 //         uuid id PK
@@ -322,6 +356,19 @@ model GameBalance {
 //         enum nodeType
 //         json eventContent
 //         uuid customerId FK
+//         uuid mapTemplateId FK
+//         json position
+//         timestamp createdAt
+//         timestamp updatedAt
+//         timestamp deletedAt
+//     }
+//
+//     MAP_TEMPLATE {
+//         uuid id PK
+//         string name
+//         string description
+//         int difficulty
+//         int nodeCount
 //         timestamp createdAt
 //         timestamp updatedAt
 //         timestamp deletedAt
@@ -368,10 +415,11 @@ model GameBalance {
 // 3. 🟡 検索・フィルタリング用インデックス:
 //    - Card: cardType, energyCost, deletedAt
 //    - Customer: customerType, difficulty, deletedAt
-//    - MapNode: nodeType, customerId, deletedAt
+//    - MapNode: nodeType, customerId, mapTemplateId, deletedAt
+//    - MapTemplate: difficulty, deletedAt
 //    - GameBalance: category, deletedAt
 //    - UnlockableContent: contentType, deletedAt
-// 4. 🟡 外部キーインデックス: 自動的に作成（customerId等）
+// 4. 🟡 外部キーインデックス: 自動的に作成（customerId、mapTemplateId等）
 //
 // ============================================
 // 🔵 ソフトデリート戦略
@@ -381,6 +429,31 @@ model GameBalance {
 // - DELETE操作時は`deletedAt`に現在時刻を設定
 // - SELECT時は`deletedAt IS NULL`でフィルタリング
 // - Prismaミドルウェアでソフトデリートを実装
+//
+// ============================================
+// 🔵 バリデーション戦略
+// ============================================
+//
+// Prismaスキーマには範囲制約（0〜5、-100〜100等）を直接定義できないため、
+// 以下の層でバリデーションを実装する：
+//
+// 1. 🔵 クライアント側バリデーション（React Hook Form + Zod）
+//    - フォーム入力時のリアルタイムバリデーション
+//    - ユーザーフレンドリーなエラーメッセージ表示
+//
+// 2. 🔵 サーバー側バリデーション（Hono.js + Zod）
+//    - APIリクエスト受信時のバリデーション
+//    - 構造化されたエラーレスポンス返却
+//
+// 3. 🟡 サービス層バリデーション（TypeScript）
+//    - ビジネスロジック固有の制約チェック
+//    - 重複チェック、依存関係チェック等
+//
+// バリデーション例:
+// - energyCost: Zodスキーマで z.number().min(0).max(5)
+// - stabilityValue: Zodスキーマで z.number().min(-100).max(100)
+// - difficulty: Zodスキーマで z.number().min(1).max(5)
+// - nodeCount: Zodスキーマで z.number().min(30).max(50)
 //
 // ============================================
 // 🔵 マイグレーション

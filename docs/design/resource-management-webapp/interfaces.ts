@@ -232,10 +232,37 @@ export interface MapNode extends BaseEntity {
   customer: Customer | null;
   /** 🔵 顧客ID */
   customerId: string | null;
+  /** 🔵 このノードのマップテンプレート（N:1、nullable） */
+  mapTemplate: MapTemplate | null;
+  /** 🔵 マップテンプレートID */
+  mapTemplateId: string | null;
+  /** 🟡 ノードの座標位置（JSON形式: {x: number, y: number}） */
+  position: { x: number; y: number } | null;
 }
 
 /**
- * 🔵 5. MetaCurrency（メタ通貨）エンティティ
+ * 🔵 5. MapTemplate（マップテンプレート）エンティティ
+ * WRREQ-035〜036より
+ */
+export interface MapTemplate extends BaseEntity {
+  /** 🔵 マップ名（最大100文字） */
+  name: string;
+  /** 🔵 説明（最大1000文字） */
+  description: string;
+  /** 🔵 難易度（範囲: 1〜5） */
+  difficulty: number;
+  /** 🔵 ノード数（範囲: 30〜50） */
+  nodeCount: number;
+  /** 🟡 アイコンURL（nullable） */
+  iconUrl: string | null;
+
+  // リレーション
+  /** 🔵 このテンプレートに含まれるノード（1:N） */
+  nodes: MapNode[];
+}
+
+/**
+ * 🔵 6. MetaCurrency（メタ通貨）エンティティ
  * WRREQ-038より
  */
 export interface MetaCurrency extends BaseEntity {
@@ -248,7 +275,7 @@ export interface MetaCurrency extends BaseEntity {
 }
 
 /**
- * 🔵 6. UnlockableContent（アンロック可能コンテンツ）エンティティ
+ * 🔵 7. UnlockableContent（アンロック可能コンテンツ）エンティティ
  * WRREQ-039〜040より
  */
 export interface UnlockableContent extends BaseEntity {
@@ -271,7 +298,7 @@ export interface UnlockableContent extends BaseEntity {
 }
 
 /**
- * 🔵 7. GameBalance（ゲームバランス）エンティティ
+ * 🔵 8. GameBalance（ゲームバランス）エンティティ
  * WRREQ-041〜042、WRREQ-048〜051より
  */
 export interface GameBalance extends BaseEntity {
@@ -516,6 +543,8 @@ export interface CreateMapNodeRequest {
   rewards?: Record<string, any> | null;
   iconUrl?: string | null;
   customerId?: string | null;
+  mapTemplateId?: string | null;
+  position?: { x: number; y: number } | null;
 }
 
 /**
@@ -529,6 +558,8 @@ export interface UpdateMapNodeRequest {
   rewards?: Record<string, any> | null;
   iconUrl?: string | null;
   customerId?: string | null;
+  mapTemplateId?: string | null;
+  position?: { x: number; y: number } | null;
 }
 
 /**
@@ -550,6 +581,55 @@ export type MapNodeListResponse = ApiResponse<PaginatedResponse<MapNode>>;
  * 🔵 マップノード詳細レスポンス
  */
 export type MapNodeDetailResponse = ApiResponse<MapNode>;
+
+// ============================================
+// 🔵 MapTemplate API 型定義
+// ============================================
+
+/**
+ * 🔵 マップテンプレート作成リクエスト
+ */
+export interface CreateMapTemplateRequest {
+  name: string;
+  description: string;
+  difficulty: number;
+  nodeCount: number;
+  iconUrl?: string | null;
+  /** 🔵 含めるノードIDリスト */
+  nodeIds?: string[];
+}
+
+/**
+ * 🔵 マップテンプレート更新リクエスト（部分更新可能）
+ */
+export interface UpdateMapTemplateRequest {
+  name?: string;
+  description?: string;
+  difficulty?: number;
+  nodeCount?: number;
+  iconUrl?: string | null;
+  nodeIds?: string[];
+}
+
+/**
+ * 🔵 マップテンプレート検索クエリパラメータ
+ */
+export interface MapTemplateQueryParams extends PaginationQuery {
+  /** 🔵 難易度でフィルタ */
+  difficulty?: number;
+  /** 🔵 名前で部分一致検索 */
+  search?: string;
+}
+
+/**
+ * 🔵 マップテンプレート一覧レスポンス
+ */
+export type MapTemplateListResponse = ApiResponse<PaginatedResponse<MapTemplate>>;
+
+/**
+ * 🔵 マップテンプレート詳細レスポンス
+ */
+export type MapTemplateDetailResponse = ApiResponse<MapTemplate>;
 
 // ============================================
 // 🔵 GameBalance API 型定義
