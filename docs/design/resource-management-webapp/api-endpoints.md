@@ -893,14 +893,14 @@ file: <JSONファイル>
 
 ---
 
-## 🔵 Hono.js 実装例
+## 🔵 Hono.js 実装例（Repository Pattern）
 
-### ルート定義例
+### 1. エントリーポイント（index.ts）
 
 ```typescript
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { validator } from 'hono/validator';
+import { createRepositoryContainer } from './di/container';
 import { cardRoutes } from './routes/cards';
 import { customerRoutes } from './routes/customers';
 import { alchemyStyleRoutes } from './routes/alchemyStyles';
@@ -909,6 +909,15 @@ import { gameBalanceRoutes } from './routes/gameBalance';
 import { exportRoutes } from './routes/export';
 
 const app = new Hono();
+
+// 🔵 Repository コンテナの初期化（依存性注入）
+const repositoryContainer = createRepositoryContainer();
+
+// 🔵 Repository コンテナをコンテキストに追加
+app.use('*', async (c, next) => {
+  c.set('repositories', repositoryContainer);
+  await next();
+});
 
 // 🔴 CORSミドルウェア
 app.use('*', cors({
@@ -938,6 +947,218 @@ app.onError((err, c) => {
 export default app;
 ```
 
+### 2. 依存性注入コンテナ（di/container.ts）
+
+```typescript
+import { IRepositoryContainer } from '../types';
+import { PrismaCardRepository } from '../repositories/prisma/PrismaCardRepository';
+import { InMemoryCardRepository } from '../repositories/memory/InMemoryCardRepository';
+// ... 他のRepository importも同様
+
+/**
+ * 🔵 Repository コンテナを作成
+ * 環境変数に応じてPrisma実装またはIn-Memory実装を返す
+ */
+export function createRepositoryContainer(): IRepositoryContainer {
+  const repositoryType = process.env.REPOSITORY_TYPE || 'prisma';
+
+  if (repositoryType === 'memory') {
+    // 🔵 テスト環境: In-Memory実装
+    return {
+      cardRepository: new InMemoryCardRepository(),
+      customerRepository: new InMemoryCustomerRepository(),
+      alchemyStyleRepository: new InMemoryAlchemyStyleRepository(),
+      mapNodeRepository: new InMemoryMapNodeRepository(),
+      mapTemplateRepository: new InMemoryMapTemplateRepository(),
+      gameBalanceRepository: new InMemoryGameBalanceRepository(),
+    };
+  }
+
+  // 🔵 本番環境: Prisma実装
+  return {
+    cardRepository: new PrismaCardRepository(),
+    customerRepository: new PrismaCustomerRepository(),
+    alchemyStyleRepository: new PrismaAlchemyStyleRepository(),
+    mapNodeRepository: new PrismaMapNodeRepository(),
+    mapTemplateRepository: new PrismaMapTemplateRepository(),
+    gameBalanceRepository: new PrismaGameBalanceRepository(),
+  };
+}
+```
+
+### 3. サービス層実装例（services/cardService.ts）
+
+```typescript
+import { ICardRepository } from '../repositories/interfaces/ICardRepository';
+import { Card, CreateCardRequest, UpdateCardRequest } from '../types';
+
+/**
+ * 🔵 Card Service
+ * Repository インターフェースに依存（実装には依存しない）
+ */
+export class CardService {
+  constructor(private readonly cardRepository: ICardRepository) {}
+
+  /**
+   * 🔵 カードを作成
+   */
+  async createCard(data: CreateCardRequest): Promise<Card> {
+    // 🔵 重複チェック
+    const existing = await this.cardRepository.findByName(data.name);
+    if (existing) {
+      throw new Error('同名のカードが既に存在します');
+    }
+
+    // 🔵 Repositoryでカード作成
+    return await this.cardRepository.create(data);
+  }
+
+  /**
+   * 🔵 カード一覧を取得
+   */
+  async getCards(page: number, limit: number, filters?: any) {
+    return await this.cardRepository.findMany({ page, limit }, filters);
+  }
+
+  // ... その他のメソッド
+}
+```
+
+### 4. コントローラー実装例（controllers/cardController.ts）
+
+```typescript
+import { Context } from 'hono';
+import { CardService } from '../services/cardService';
+import { IRepositoryContainer } from '../types';
+
+/**
+ * 🔵 Card Controller
+ */
+export class CardController {
+  /**
+   * 🔵 カード作成
+   */
+  static async create(c: Context) {
+    // 🔵 Repository コンテナを取得
+    const repositories = c.get('repositories') as IRepositoryContainer;
+
+    // 🔵 Service を初期化（Repositoryを注入）
+    const cardService = new CardService(repositories.cardRepository);
+
+    try {
+      const data = await c.req.json();
+      const card = await cardService.createCard(data);
+
+      return c.json({
+        data: card,
+        message: 'カードを作成しました',
+      }, 201);
+    } catch (error) {
+      return c.json({
+        error: {
+          code: 'CREATE_FAILED',
+          message: error.message,
+        },
+      }, 400);
+    }
+  }
+
+  // ... その他のメソッド
+}
+```
+
+### 5. In-Memory Repository 実装例（repositories/memory/InMemoryCardRepository.ts）
+
+```typescript
+import { ICardRepository } from '../interfaces/ICardRepository';
+import { Card, CreateCardRequest, UpdateCardRequest, PaginationOptions, PaginationResult } from '../../types';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * 🔵 In-Memory Card Repository（テスト用）
+ * データベース不要でテストが実行可能
+ */
+export class InMemoryCardRepository implements ICardRepository {
+  private cards: Card[] = [];
+
+  async create(data: CreateCardRequest): Promise<Card> {
+    const card: Card = {
+      id: uuidv4(),
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+      evolutionFrom: null,
+      evolutionTo: [],
+      initialDeckStyles: [],
+      unlockableContent: null,
+      rewardCustomers: [],
+    };
+    this.cards.push(card);
+    return card;
+  }
+
+  async findById(id: string): Promise<Card | null> {
+    return this.cards.find(c => c.id === id && !c.deletedAt) || null;
+  }
+
+  async findMany(options: PaginationOptions, filters?: any): Promise<PaginationResult<Card>> {
+    let filtered = this.cards.filter(c => !c.deletedAt);
+
+    // フィルタリング
+    if (filters?.cardType) {
+      filtered = filtered.filter(c => c.cardType === filters.cardType);
+    }
+    if (filters?.search) {
+      filtered = filtered.filter(c => c.name.includes(filters.search));
+    }
+
+    // ページネーション
+    const start = (options.page - 1) * options.limit;
+    const items = filtered.slice(start, start + options.limit);
+
+    return {
+      items,
+      total: filtered.length,
+      page: options.page,
+      limit: options.limit,
+      totalPages: Math.ceil(filtered.length / options.limit),
+    };
+  }
+
+  async update(id: string, data: UpdateCardRequest): Promise<Card> {
+    const index = this.cards.findIndex(c => c.id === id && !c.deletedAt);
+    if (index === -1) throw new Error('Card not found');
+
+    this.cards[index] = {
+      ...this.cards[index],
+      ...data,
+      updatedAt: new Date(),
+    };
+    return this.cards[index];
+  }
+
+  async delete(id: string): Promise<void> {
+    const index = this.cards.findIndex(c => c.id === id && !c.deletedAt);
+    if (index === -1) throw new Error('Card not found');
+
+    this.cards[index].deletedAt = new Date();
+  }
+
+  async count(filters?: any): Promise<number> {
+    let filtered = this.cards.filter(c => !c.deletedAt);
+    if (filters?.cardType) {
+      filtered = filtered.filter(c => c.cardType === filters.cardType);
+    }
+    return filtered.length;
+  }
+
+  async findByName(name: string): Promise<Card | null> {
+    return this.cards.find(c => c.name === name && !c.deletedAt) || null;
+  }
+}
+```
+
 ---
 
 ## 🗓️ 変更履歴
@@ -945,3 +1166,4 @@ export default app;
 | 日付 | バージョン | 変更内容 |
 |------|----------|---------|
 | 2025-11-09 | 1.0 | 初版作成。Hono.js + Prisma + PostgreSQLベースのAPI設計 |
+| 2025-11-09 | 2.0 | 🔵 Repository Pattern実装例を追加。依存性注入、In-Memory Repository実装例を含む |

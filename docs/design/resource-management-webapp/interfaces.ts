@@ -1,6 +1,12 @@
 // ============================================
 // アトリエ錬金術ゲーム リソース管理Webアプリ
 // TypeScript型定義
+//
+// 🔵 バージョン 2.0 更新内容:
+// - Repository Pattern のインターフェース定義を追加
+// - ICardRepository, ICustomerRepository 等の Repository インターフェース
+// - IRepositoryContainer（依存性注入コンテナ）を追加
+// - Prisma実装とIn-Memory実装を切り替え可能に
 // ============================================
 
 // ============================================
@@ -715,6 +721,254 @@ export interface ImportResult {
 export interface ImportResponse extends ApiResponse<ImportResult> {
   /** 🔵 インポート統計 */
   imported: ImportResult;
+}
+
+// ============================================
+// 🔵 Repository インターフェース定義
+// ============================================
+
+/**
+ * 🔵 ページネーションオプション
+ */
+export interface PaginationOptions {
+  page: number;
+  limit: number;
+}
+
+/**
+ * 🔵 ページネーション結果
+ */
+export interface PaginationResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/**
+ * 🔵 1. Card Repository インターフェース
+ * データアクセス層の抽象化（Prisma実装とIn-Memory実装を切り替え可能）
+ */
+export interface ICardRepository {
+  /**
+   * 🔵 カードを作成
+   */
+  create(data: CreateCardRequest): Promise<Card>;
+
+  /**
+   * 🔵 IDでカードを取得
+   */
+  findById(id: string): Promise<Card | null>;
+
+  /**
+   * 🔵 カード一覧を取得（ページネーション、フィルタリング）
+   */
+  findMany(
+    options: PaginationOptions,
+    filters?: CardQueryParams
+  ): Promise<PaginationResult<Card>>;
+
+  /**
+   * 🔵 カードを更新
+   */
+  update(id: string, data: UpdateCardRequest): Promise<Card>;
+
+  /**
+   * 🔵 カードを削除（ソフトデリート）
+   */
+  delete(id: string): Promise<void>;
+
+  /**
+   * 🔵 カードの総数を取得
+   */
+  count(filters?: CardQueryParams): Promise<number>;
+
+  /**
+   * 🔵 名前でカードを検索
+   */
+  findByName(name: string): Promise<Card | null>;
+}
+
+/**
+ * 🔵 2. Customer Repository インターフェース
+ */
+export interface ICustomerRepository {
+  /**
+   * 🔵 顧客を作成
+   */
+  create(data: CreateCustomerRequest): Promise<Customer>;
+
+  /**
+   * 🔵 IDで顧客を取得
+   */
+  findById(id: string): Promise<Customer | null>;
+
+  /**
+   * 🔵 顧客一覧を取得（ページネーション、フィルタリング）
+   */
+  findMany(
+    options: PaginationOptions,
+    filters?: CustomerQueryParams
+  ): Promise<PaginationResult<Customer>>;
+
+  /**
+   * 🔵 顧客を更新
+   */
+  update(id: string, data: UpdateCustomerRequest): Promise<Customer>;
+
+  /**
+   * 🔵 顧客を削除（ソフトデリート）
+   */
+  delete(id: string): Promise<void>;
+
+  /**
+   * 🔵 顧客の総数を取得
+   */
+  count(filters?: CustomerQueryParams): Promise<number>;
+}
+
+/**
+ * 🔵 3. AlchemyStyle Repository インターフェース
+ */
+export interface IAlchemyStyleRepository {
+  /**
+   * 🔵 錬金スタイルを作成
+   */
+  create(data: CreateAlchemyStyleRequest): Promise<AlchemyStyle>;
+
+  /**
+   * 🔵 IDで錬金スタイルを取得
+   */
+  findById(id: string): Promise<AlchemyStyle | null>;
+
+  /**
+   * 🔵 錬金スタイル一覧を取得
+   */
+  findAll(): Promise<AlchemyStyle[]>;
+
+  /**
+   * 🔵 錬金スタイルを更新
+   */
+  update(id: string, data: UpdateAlchemyStyleRequest): Promise<AlchemyStyle>;
+
+  /**
+   * 🔵 錬金スタイルを削除（ソフトデリート）
+   */
+  delete(id: string): Promise<void>;
+
+  /**
+   * 🔵 名前で錬金スタイルを検索
+   */
+  findByName(name: string): Promise<AlchemyStyle | null>;
+}
+
+/**
+ * 🔵 4. MapNode Repository インターフェース
+ */
+export interface IMapNodeRepository {
+  /**
+   * 🔵 マップノードを作成
+   */
+  create(data: CreateMapNodeRequest): Promise<MapNode>;
+
+  /**
+   * 🔵 IDでマップノードを取得
+   */
+  findById(id: string): Promise<MapNode | null>;
+
+  /**
+   * 🔵 マップノード一覧を取得（ページネーション、フィルタリング）
+   */
+  findMany(
+    options: PaginationOptions,
+    filters?: MapNodeQueryParams
+  ): Promise<PaginationResult<MapNode>>;
+
+  /**
+   * 🔵 マップノードを更新
+   */
+  update(id: string, data: UpdateMapNodeRequest): Promise<MapNode>;
+
+  /**
+   * 🔵 マップノードを削除（ソフトデリート）
+   */
+  delete(id: string): Promise<void>;
+
+  /**
+   * 🔵 マップテンプレートIDでノードを検索
+   */
+  findByMapTemplateId(mapTemplateId: string): Promise<MapNode[]>;
+}
+
+/**
+ * 🔵 5. MapTemplate Repository インターフェース
+ */
+export interface IMapTemplateRepository {
+  /**
+   * 🔵 マップテンプレートを作成
+   */
+  create(data: CreateMapTemplateRequest): Promise<MapTemplate>;
+
+  /**
+   * 🔵 IDでマップテンプレートを取得
+   */
+  findById(id: string): Promise<MapTemplate | null>;
+
+  /**
+   * 🔵 マップテンプレート一覧を取得（ページネーション、フィルタリング）
+   */
+  findMany(
+    options: PaginationOptions,
+    filters?: MapTemplateQueryParams
+  ): Promise<PaginationResult<MapTemplate>>;
+
+  /**
+   * 🔵 マップテンプレートを更新
+   */
+  update(id: string, data: UpdateMapTemplateRequest): Promise<MapTemplate>;
+
+  /**
+   * 🔵 マップテンプレートを削除（ソフトデリート）
+   */
+  delete(id: string): Promise<void>;
+}
+
+/**
+ * 🔵 6. GameBalance Repository インターフェース
+ */
+export interface IGameBalanceRepository {
+  /**
+   * 🔵 IDでゲームバランス設定を取得
+   */
+  findById(id: string): Promise<GameBalance | null>;
+
+  /**
+   * 🔵 設定キーでゲームバランス設定を取得
+   */
+  findByKey(settingKey: string): Promise<GameBalance | null>;
+
+  /**
+   * 🔵 ゲームバランス設定一覧を取得（カテゴリでフィルタリング）
+   */
+  findByCategory(category?: GameBalanceCategory): Promise<GameBalance[]>;
+
+  /**
+   * 🔵 ゲームバランス設定を更新
+   */
+  update(id: string, data: UpdateGameBalanceRequest): Promise<GameBalance>;
+}
+
+/**
+ * 🔵 Repository コンテナ（依存性注入用）
+ */
+export interface IRepositoryContainer {
+  cardRepository: ICardRepository;
+  customerRepository: ICustomerRepository;
+  alchemyStyleRepository: IAlchemyStyleRepository;
+  mapNodeRepository: IMapNodeRepository;
+  mapTemplateRepository: IMapTemplateRepository;
+  gameBalanceRepository: IGameBalanceRepository;
 }
 
 // ============================================

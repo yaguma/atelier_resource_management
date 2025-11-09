@@ -20,10 +20,15 @@ flowchart TB
         Routes[APIルート]
         Controller[コントローラー]
         Service[サービス層]
+        RepoInterface[🔵 Repository<br/>Interface]
+    end
+
+    subgraph DataAccess["🔵 データアクセス層"]
+        PrismaRepo[🔵 Prisma<br/>Repository]
+        MemoryRepo[🔵 In-Memory<br/>Repository]
     end
 
     subgraph Database["🔵 データベース (PostgreSQL)"]
-        Prisma[Prisma ORM]
         DB[(PostgreSQL)]
     end
 
@@ -38,11 +43,17 @@ flowchart TB
     Valid --> Routes
     Routes --> Controller
     Controller --> Service
-    Service --> Prisma
-    Prisma --> DB
+    Service --> RepoInterface
 
-    DB -->|🔵 Data| Prisma
-    Prisma --> Service
+    RepoInterface -->|本番環境| PrismaRepo
+    RepoInterface -.->|テスト環境| MemoryRepo
+    PrismaRepo --> DB
+    MemoryRepo -.->|メモリ内データ| MemoryRepo
+
+    DB -->|🔵 Data| PrismaRepo
+    PrismaRepo --> RepoInterface
+    MemoryRepo -.-> RepoInterface
+    RepoInterface --> Service
     Service --> Controller
     Controller --> Routes
     Routes -->|🔵 JSON Response| Axios
@@ -73,13 +84,18 @@ flowchart TD
     K --> L[🔴 フロントエンド<br/>エラー表示]
     J -->|Yes| M[🔵 Controller:<br/>cardController.create]
     M --> N[🔵 Service:<br/>cardService.create]
-    N --> O[🔵 Prisma:<br/>card.create]
-    O --> P[(🔵 PostgreSQL<br/>INSERT)]
-    P --> Q[🔵 新規カードデータ<br/>返却]
-    Q --> R[🔵 201 Created<br/>レスポンス]
-    R --> S[🔵 TanStack Query<br/>キャッシュ無効化]
-    S --> T[🔴 トースト通知<br/>「カードを作成しました」]
-    T --> U[🟡 カード一覧画面に<br/>リダイレクト]
+    N --> O[🔵 Repository:<br/>ICardRepository.create]
+    O --> P{🔵 環境判定}
+    P -->|本番| Q1[🔵 PrismaRepository]
+    P -.->|テスト| R1[🔵 InMemoryRepository]
+    Q1 --> S1[(🔵 PostgreSQL<br/>INSERT)]
+    R1 -.-> T1[(🔵 Memory<br/>Array.push)]
+    S1 --> U1[🔵 新規カードデータ<br/>返却]
+    T1 -.-> U1
+    U1 --> V[🔵 201 Created<br/>レスポンス]
+    V --> W[🔵 TanStack Query<br/>キャッシュ無効化]
+    W --> X[🔴 トースト通知<br/>「カードを作成しました」]
+    X --> Y[🟡 カード一覧画面に<br/>リダイレクト]
 ```
 
 ---
@@ -95,10 +111,15 @@ flowchart TD
     E --> F[🔵 Hono.js<br/>GET /api/cards]
     F --> G[🔵 Controller:<br/>cardController.list]
     G --> H[🔵 Service:<br/>cardService.findMany]
-    H --> I[🔵 Prisma:<br/>card.findMany<br/>+ count]
-    I --> J[(🔵 PostgreSQL<br/>SELECT)]
-    J --> K[🔵 カードリスト<br/>+ 総件数]
-    K --> L[🔵 200 OK<br/>ページネーション<br/>レスポンス]
+    H --> H1[🔵 Repository:<br/>ICardRepository.findMany]
+    H1 --> H2{🔵 環境判定}
+    H2 -->|本番| H3[🔵 PrismaRepository]
+    H2 -.->|テスト| H4[🔵 InMemoryRepository]
+    H3 --> I[(🔵 PostgreSQL<br/>SELECT)]
+    H4 -.-> I1[(🔵 Memory<br/>Array.filter)]
+    I --> J[🔵 カードリスト<br/>+ 総件数]
+    I1 -.-> J
+    J --> L[🔵 200 OK<br/>ページネーション<br/>レスポンス]
     L --> M[🔵 TanStack Query<br/>キャッシュ保存]
     M --> N[🟡 UIにデータ表示]
 
@@ -181,7 +202,9 @@ sequenceDiagram
     participant Hono as 🔵 Hono.js API
     participant Controller as 🔵 CardController
     participant Service as 🔵 CardService
-    participant Prisma as 🔵 Prisma ORM
+    participant Repo as 🔵 ICardRepository
+    participant PrismaRepo as 🔵 PrismaRepository
+    participant MemoryRepo as 🔵 InMemoryRepository
     participant DB as 🔵 PostgreSQL
 
     User->>Form: フォーム入力<br/>(name, cardType, energyCost...)
@@ -218,10 +241,20 @@ sequenceDiagram
                 TQ-->>Form: onError
                 Form-->>User: 「同名カードが存在します」
             else 🟡 OK
-                Service->>Prisma: prisma.card.create(data)
-                Prisma->>DB: INSERT INTO cards
-                DB-->>Prisma: 新規カードレコード
-                Prisma-->>Service: Card オブジェクト
+                Service->>Repo: repository.create(data)
+
+                alt 本番環境
+                    Repo->>PrismaRepo: PrismaCardRepository.create()
+                    PrismaRepo->>DB: INSERT INTO cards
+                    DB-->>PrismaRepo: 新規カードレコード
+                    PrismaRepo-->>Repo: Card オブジェクト
+                else テスト環境
+                    Repo->>MemoryRepo: InMemoryCardRepository.create()
+                    MemoryRepo->>MemoryRepo: cards.push(newCard)
+                    MemoryRepo-->>Repo: Card オブジェクト
+                end
+
+                Repo-->>Service: Card オブジェクト
                 Service-->>Controller: Card オブジェクト
                 Controller-->>Hono: 201 Created<br/>{ data: Card, message: "..." }
                 Hono-->>Axios: HTTP Response
@@ -392,3 +425,4 @@ flowchart TD
 | 日付 | バージョン | 変更内容 |
 |------|----------|---------|
 | 2025-11-09 | 1.0 | 初版作成。React+Hono.js+TanStack Query+Prismaのデータフロー図 |
+| 2025-11-09 | 2.0 | 🔵 Repository層を追加。Prisma実装とIn-Memory実装を切り替え可能なデータフロー図に更新 |

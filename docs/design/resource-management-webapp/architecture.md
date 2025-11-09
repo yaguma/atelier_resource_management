@@ -30,8 +30,13 @@
    - Hono.js + TypeScript
    - ビジネスロジック、バリデーション、API提供
 
-3. **データ層** (Database)
-   - PostgreSQL + Prisma ORM
+3. **🔵 データアクセス層** (Repository)
+   - Repository Pattern（データアクセスの抽象化層）
+   - インターフェース定義により実装を差し替え可能
+   - Prisma実装（本番環境用）とIn-Memory実装（テスト用）を提供
+
+4. **データ層** (Database)
+   - PostgreSQL
    - データ永続化、トランザクション管理
 
 ---
@@ -129,24 +134,45 @@ backend/
 │   │   ├── cardController.ts
 │   │   ├── customerController.ts
 │   │   └── ...
-│   ├── services/           # サービス層（データ操作）
+│   ├── services/           # サービス層（ビジネスロジック）
 │   │   ├── cardService.ts
 │   │   ├── customerService.ts
 │   │   └── ...
+│   ├── 🔵 repositories/    # 🔵 データアクセス層（Repository Pattern）
+│   │   ├── interfaces/     # 🔵 Repositoryインターフェース定義
+│   │   │   ├── ICardRepository.ts
+│   │   │   ├── ICustomerRepository.ts
+│   │   │   └── ...
+│   │   ├── prisma/         # 🔵 Prisma実装（本番環境用）
+│   │   │   ├── PrismaCardRepository.ts
+│   │   │   ├── PrismaCustomerRepository.ts
+│   │   │   └── ...
+│   │   └── memory/         # 🔵 In-Memory実装（テスト用）
+│   │       ├── InMemoryCardRepository.ts
+│   │       ├── InMemoryCustomerRepository.ts
+│   │       └── ...
 │   ├── middlewares/        # ミドルウェア
 │   │   ├── cors.ts
 │   │   ├── validation.ts
 │   │   ├── errorHandler.ts
 │   │   └── logger.ts
+│   ├── 🔵 di/              # 🔵 依存性注入コンテナ
+│   │   └── container.ts    # 🔵 Repositoryの生成とインジェクション
 │   ├── utils/              # ユーティリティ
 │   │   ├── response.ts     # レスポンスフォーマット
 │   │   └── validation.ts   # バリデーションヘルパー
 │   └── types/              # 型定義
 │       └── index.ts
-├── prisma/
+├── prisma/                 # 🟡 Prisma関連（本番環境用のみ）
 │   ├── schema.prisma       # Prismaスキーマ
 │   ├── migrations/         # マイグレーションファイル
 │   └── seed.ts             # シードデータ
+├── 🔵 tests/               # 🔵 テスト
+│   ├── unit/               # 🔵 ユニットテスト（In-Memory Repository使用）
+│   │   ├── services/
+│   │   └── controllers/
+│   └── integration/        # 🔵 統合テスト（Prisma Repository使用）
+│       └── api/
 ├── package.json
 └── tsconfig.json
 ```
@@ -163,8 +189,13 @@ backend/
 - **🔵 開発環境**: PostgreSQL 14+（ローカルDocker）
 - **🔵 本番環境**: Azure Database for PostgreSQL（要件WRREQ-008-2より）
 
-#### ORM
-- **🔵 Prisma 5.0+**: 型安全なクエリ、マイグレーション管理（要件WRREQ-004より）
+#### 🔵 データアクセス層の設計（Repository Pattern）
+- **🔵 抽象化**: Repository インターフェースでデータアクセスを抽象化
+- **🔵 実装の分離**:
+  - **Prisma実装**: 本番環境用（要件WRREQ-004より）
+  - **In-Memory実装**: テスト用（データベース不要）
+- **🔵 依存性注入**: 環境変数により実装を切り替え（`NODE_ENV`、`REPOSITORY_TYPE`）
+- **🔵 テスタビリティ**: データベースなしでユニットテストが実行可能
 
 #### キャッシュ戦略
 - **🟡 クエリキャッシュ**: TanStack Queryのクライアントサイドキャッシング（staleTime: 5分）
@@ -294,18 +325,30 @@ backend/
 
 ---
 
-## 🟡 テスト戦略
+## 🔵 テスト戦略
 
-### 🔴 ユニットテスト
+### 🔵 ユニットテスト（データベース不要）
 - **🔴 フロントエンド**: Vitest + Testing Library（カスタムフック、ユーティリティ関数）
-- **🔴 バックエンド**: Vitest（サービス層、コントローラー層）
+- **🔵 バックエンド**: Vitest + In-Memory Repository
+  - **サービス層のテスト**: In-Memory Repository を注入してテスト
+  - **コントローラー層のテスト**: In-Memory Repository を注入してテスト
+  - **🔵 データベース不要**: PostgreSQL、Dockerコンテナ不要でテスト実行
+  - **🔵 高速実行**: メモリ内でデータ操作、CI/CD環境でも高速
 
-### 🔴 統合テスト
+### 🔴 統合テスト（データベース使用）
 - **🔴 API テスト**: Honoアプリケーション全体のエンドツーエンドテスト
+  - Prisma Repository を使用
+  - テスト用データベース（Docker）でテスト実行
 - **🔴 データベーステスト**: Prismaマイグレーション、シード実行
 
 ### 🔴 E2Eテスト（オプション）
 - **🔴 ツール**: Playwright（ユーザーフローのテスト）
+
+### 🔵 テスト戦略の利点
+- **🔵 高速なユニットテスト**: データベース起動不要で数秒で完了
+- **🔵 CI/CD最適化**: GitHub Actions等でデータベースセットアップ不要
+- **🔵 テスト環境の分離**: ユニットテストと統合テストを明確に分離
+- **🔵 モック不要**: In-Memory実装が実際のRepositoryと同じインターフェース
 
 ### 🔴 テストカバレッジ目標
 - **🟡 80%以上推奨**: 重要なビジネスロジック、API エンドポイント
@@ -362,8 +405,9 @@ volumes:
 [Controller]
   ↓ ビジネスロジック
 [Service Layer]
-  ↓ Prisma ORM
-[PostgreSQL Database]
+  ↓ 🔵 Repository Interface (ICardRepository)
+  ├─ 本番環境 → [🔵 Prisma Repository] → [PostgreSQL Database]
+  └─ テスト環境 → [🔵 In-Memory Repository] → [メモリ内データ]
   ↓ レスポンス
 [Hono.js API]
   ↓ JSON
@@ -418,3 +462,4 @@ volumes:
 | 日付 | バージョン | 変更内容 |
 |------|----------|---------|
 | 2025-11-09 | 1.0 | 初版作成。React+Vite+Hono.js+Azure App Serviceベースのアーキテクチャ設計 |
+| 2025-11-09 | 2.0 | 🔵 Repository Patternを導入。Prismaがなくてもテストが動く設計に変更。データアクセス層を抽象化し、In-Memory実装とPrisma実装を切り替え可能に |
