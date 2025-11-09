@@ -81,16 +81,173 @@ https://{app-name}.azurewebsites.net/api
 | 409 Conflict | 競合エラー | ユニーク制約違反 |
 | 500 Internal Server Error | サーバーエラー | DB接続エラー等 |
 
-### 🔴 エラーコード一覧
+### 🔴 エラーコード一覧（体系化）
 
-| コード | HTTPステータス | 説明 |
-|--------|---------------|------|
-| VALIDATION_ERROR | 400 | バリデーションエラー |
-| NOT_FOUND | 404 | リソースが見つからない |
-| DUPLICATE_ENTRY | 409 | ユニーク制約違反 |
-| DEPENDENCY_ERROR | 409 | 依存関係エラー（削除時） |
-| DATABASE_ERROR | 500 | データベースエラー |
-| INTERNAL_ERROR | 500 | 内部サーバーエラー |
+#### 🔵 認証・認可エラー（AUTH_xxx）
+
+| コード | HTTPステータス | 説明 | 発生条件 |
+|--------|---------------|------|---------|
+| AUTH_001 | 401 | 認証エラー | 🔴 認証情報が無効（将来実装） |
+| AUTH_002 | 401 | トークン期限切れ | 🔴 JWTトークンの有効期限切れ（将来実装） |
+| AUTH_003 | 403 | 権限不足 | 🔴 操作に必要な権限がない（将来実装） |
+
+#### 🔵 バリデーションエラー（VALID_xxx）
+
+| コード | HTTPステータス | 説明 | 発生条件 |
+|--------|---------------|------|---------|
+| VALID_001 | 400 | バリデーションエラー | リクエストデータの形式・範囲が不正 |
+| VALID_002 | 400 | 型不一致 | 期待される型と異なる |
+| VALID_003 | 400 | 必須フィールド不足 | 必須フィールドが未入力 |
+| VALID_004 | 400 | 範囲外の値 | 数値が許容範囲外（例: energyCost > 5） |
+
+#### 🔵 リソースエラー（RES_xxx）
+
+| コード | HTTPステータス | 説明 | 発生条件 |
+|--------|---------------|------|---------|
+| RES_001 | 404 | リソース未検出 | 指定されたIDのリソースが存在しない |
+| RES_002 | 409 | 重複エントリ | ユニーク制約違反（同名カード等） |
+| RES_003 | 409 | 依存関係エラー | 他リソースから参照されているため削除不可 |
+| RES_004 | 410 | 削除済みリソース | ソフトデリート済みリソースへのアクセス |
+
+#### 🔵 データベースエラー（DB_xxx）
+
+| コード | HTTPステータス | 説明 | 発生条件 |
+|--------|---------------|------|---------|
+| DB_001 | 500 | データベース接続エラー | PostgreSQLへの接続失敗 |
+| DB_002 | 500 | トランザクションエラー | トランザクションのコミット/ロールバック失敗 |
+| DB_003 | 500 | クエリ実行エラー | SQL実行時のエラー |
+| DB_004 | 503 | データベース過負荷 | 接続プール枯渇 |
+
+#### 🔵 Repository エラー（REPO_xxx）
+
+| コード | HTTPステータス | 説明 | 発生条件 |
+|--------|---------------|------|---------|
+| REPO_001 | 500 | Repository初期化エラー | Repository実装の初期化失敗 |
+| REPO_002 | 500 | Repository操作エラー | Repository層での予期しないエラー |
+| REPO_003 | 500 | 実装未検出 | 指定されたRepository実装が見つからない |
+
+#### 🔵 システムエラー（SYS_xxx）
+
+| コード | HTTPステータス | 説明 | 発生条件 |
+|--------|---------------|------|---------|
+| SYS_001 | 500 | 内部サーバーエラー | 予期しないシステムエラー |
+| SYS_002 | 503 | サービス利用不可 | メンテナンス中またはシステム停止 |
+| SYS_003 | 504 | タイムアウト | リクエスト処理がタイムアウト |
+
+#### 🔵 ネットワークエラー（NET_xxx）
+
+| コード | HTTPステータス | 説明 | 発生条件 |
+|--------|---------------|------|---------|
+| NET_001 | 429 | レート制限超過 | API呼び出し回数が制限を超過 |
+| NET_002 | 413 | リクエストサイズ超過 | リクエストボディが大きすぎる |
+| NET_003 | 408 | リクエストタイムアウト | クライアントのリクエストがタイムアウト |
+
+---
+
+### 🔵 エラーレスポンスの使用例
+
+#### バリデーションエラー（複数フィールド）
+
+```json
+{
+  "error": {
+    "code": "VALID_001",
+    "message": "入力データが不正です",
+    "details": [
+      {
+        "field": "energyCost",
+        "message": "エネルギーコストは0〜5の範囲で入力してください",
+        "code": "VALID_004"
+      },
+      {
+        "field": "stabilityValue",
+        "message": "安定値は-100〜100の範囲で入力してください",
+        "code": "VALID_004"
+      }
+    ]
+  }
+}
+```
+
+#### リソース未検出エラー
+
+```json
+{
+  "error": {
+    "code": "RES_001",
+    "message": "指定されたカードが見つかりません",
+    "details": {
+      "resourceType": "Card",
+      "resourceId": "550e8400-e29b-41d4-a716-446655440000"
+    }
+  }
+}
+```
+
+#### 重複エントリエラー
+
+```json
+{
+  "error": {
+    "code": "RES_002",
+    "message": "同名のカードが既に存在します",
+    "details": {
+      "field": "name",
+      "value": "炎の素材",
+      "conflictingId": "660e8400-e29b-41d4-a716-446655440001"
+    }
+  }
+}
+```
+
+#### 依存関係エラー
+
+```json
+{
+  "error": {
+    "code": "RES_003",
+    "message": "このカードは他のリソースから参照されているため削除できません",
+    "details": [
+      {
+        "resourceType": "AlchemyStyle",
+        "resourceName": "火の錬金術",
+        "relationship": "initialDeckCards"
+      }
+    ]
+  }
+}
+```
+
+#### データベース接続エラー
+
+```json
+{
+  "error": {
+    "code": "DB_001",
+    "message": "データベース接続エラーが発生しました",
+    "details": {
+      "retryAfter": 5000,
+      "suggestion": "しばらく時間をおいて再度お試しください"
+    }
+  }
+}
+```
+
+#### レート制限超過エラー
+
+```json
+{
+  "error": {
+    "code": "NET_001",
+    "message": "API呼び出し回数が制限を超過しました",
+    "details": {
+      "limit": 100,
+      "remaining": 0,
+      "resetAt": "2025-11-09T12:05:00Z"
+    }
+  }
+}
+```
 
 ---
 
@@ -893,14 +1050,14 @@ file: <JSONファイル>
 
 ---
 
-## 🔵 Hono.js 実装例
+## 🔵 Hono.js 実装例（Repository Pattern）
 
-### ルート定義例
+### 1. エントリーポイント（index.ts）
 
 ```typescript
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { validator } from 'hono/validator';
+import { createRepositoryContainer } from './di/container';
 import { cardRoutes } from './routes/cards';
 import { customerRoutes } from './routes/customers';
 import { alchemyStyleRoutes } from './routes/alchemyStyles';
@@ -909,6 +1066,15 @@ import { gameBalanceRoutes } from './routes/gameBalance';
 import { exportRoutes } from './routes/export';
 
 const app = new Hono();
+
+// 🔵 Repository コンテナの初期化（依存性注入）
+const repositoryContainer = createRepositoryContainer();
+
+// 🔵 Repository コンテナをコンテキストに追加
+app.use('*', async (c, next) => {
+  c.set('repositories', repositoryContainer);
+  await next();
+});
 
 // 🔴 CORSミドルウェア
 app.use('*', cors({
@@ -938,6 +1104,218 @@ app.onError((err, c) => {
 export default app;
 ```
 
+### 2. 依存性注入コンテナ（di/container.ts）
+
+```typescript
+import { IRepositoryContainer } from '../types';
+import { PrismaCardRepository } from '../repositories/prisma/PrismaCardRepository';
+import { InMemoryCardRepository } from '../repositories/memory/InMemoryCardRepository';
+// ... 他のRepository importも同様
+
+/**
+ * 🔵 Repository コンテナを作成
+ * 環境変数に応じてPrisma実装またはIn-Memory実装を返す
+ */
+export function createRepositoryContainer(): IRepositoryContainer {
+  const repositoryType = process.env.REPOSITORY_TYPE || 'prisma';
+
+  if (repositoryType === 'memory') {
+    // 🔵 テスト環境: In-Memory実装
+    return {
+      cardRepository: new InMemoryCardRepository(),
+      customerRepository: new InMemoryCustomerRepository(),
+      alchemyStyleRepository: new InMemoryAlchemyStyleRepository(),
+      mapNodeRepository: new InMemoryMapNodeRepository(),
+      mapTemplateRepository: new InMemoryMapTemplateRepository(),
+      gameBalanceRepository: new InMemoryGameBalanceRepository(),
+    };
+  }
+
+  // 🔵 本番環境: Prisma実装
+  return {
+    cardRepository: new PrismaCardRepository(),
+    customerRepository: new PrismaCustomerRepository(),
+    alchemyStyleRepository: new PrismaAlchemyStyleRepository(),
+    mapNodeRepository: new PrismaMapNodeRepository(),
+    mapTemplateRepository: new PrismaMapTemplateRepository(),
+    gameBalanceRepository: new PrismaGameBalanceRepository(),
+  };
+}
+```
+
+### 3. サービス層実装例（services/cardService.ts）
+
+```typescript
+import { ICardRepository } from '../repositories/interfaces/ICardRepository';
+import { Card, CreateCardRequest, UpdateCardRequest } from '../types';
+
+/**
+ * 🔵 Card Service
+ * Repository インターフェースに依存（実装には依存しない）
+ */
+export class CardService {
+  constructor(private readonly cardRepository: ICardRepository) {}
+
+  /**
+   * 🔵 カードを作成
+   */
+  async createCard(data: CreateCardRequest): Promise<Card> {
+    // 🔵 重複チェック
+    const existing = await this.cardRepository.findByName(data.name);
+    if (existing) {
+      throw new Error('同名のカードが既に存在します');
+    }
+
+    // 🔵 Repositoryでカード作成
+    return await this.cardRepository.create(data);
+  }
+
+  /**
+   * 🔵 カード一覧を取得
+   */
+  async getCards(page: number, limit: number, filters?: any) {
+    return await this.cardRepository.findMany({ page, limit }, filters);
+  }
+
+  // ... その他のメソッド
+}
+```
+
+### 4. コントローラー実装例（controllers/cardController.ts）
+
+```typescript
+import { Context } from 'hono';
+import { CardService } from '../services/cardService';
+import { IRepositoryContainer } from '../types';
+
+/**
+ * 🔵 Card Controller
+ */
+export class CardController {
+  /**
+   * 🔵 カード作成
+   */
+  static async create(c: Context) {
+    // 🔵 Repository コンテナを取得
+    const repositories = c.get('repositories') as IRepositoryContainer;
+
+    // 🔵 Service を初期化（Repositoryを注入）
+    const cardService = new CardService(repositories.cardRepository);
+
+    try {
+      const data = await c.req.json();
+      const card = await cardService.createCard(data);
+
+      return c.json({
+        data: card,
+        message: 'カードを作成しました',
+      }, 201);
+    } catch (error) {
+      return c.json({
+        error: {
+          code: 'CREATE_FAILED',
+          message: error.message,
+        },
+      }, 400);
+    }
+  }
+
+  // ... その他のメソッド
+}
+```
+
+### 5. In-Memory Repository 実装例（repositories/memory/InMemoryCardRepository.ts）
+
+```typescript
+import { ICardRepository } from '../interfaces/ICardRepository';
+import { Card, CreateCardRequest, UpdateCardRequest, PaginationOptions, PaginationResult } from '../../types';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * 🔵 In-Memory Card Repository（テスト用）
+ * データベース不要でテストが実行可能
+ */
+export class InMemoryCardRepository implements ICardRepository {
+  private cards: Card[] = [];
+
+  async create(data: CreateCardRequest): Promise<Card> {
+    const card: Card = {
+      id: uuidv4(),
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+      evolutionFrom: null,
+      evolutionTo: [],
+      initialDeckStyles: [],
+      unlockableContent: null,
+      rewardCustomers: [],
+    };
+    this.cards.push(card);
+    return card;
+  }
+
+  async findById(id: string): Promise<Card | null> {
+    return this.cards.find(c => c.id === id && !c.deletedAt) || null;
+  }
+
+  async findMany(options: PaginationOptions, filters?: any): Promise<PaginationResult<Card>> {
+    let filtered = this.cards.filter(c => !c.deletedAt);
+
+    // フィルタリング
+    if (filters?.cardType) {
+      filtered = filtered.filter(c => c.cardType === filters.cardType);
+    }
+    if (filters?.search) {
+      filtered = filtered.filter(c => c.name.includes(filters.search));
+    }
+
+    // ページネーション
+    const start = (options.page - 1) * options.limit;
+    const items = filtered.slice(start, start + options.limit);
+
+    return {
+      items,
+      total: filtered.length,
+      page: options.page,
+      limit: options.limit,
+      totalPages: Math.ceil(filtered.length / options.limit),
+    };
+  }
+
+  async update(id: string, data: UpdateCardRequest): Promise<Card> {
+    const index = this.cards.findIndex(c => c.id === id && !c.deletedAt);
+    if (index === -1) throw new Error('Card not found');
+
+    this.cards[index] = {
+      ...this.cards[index],
+      ...data,
+      updatedAt: new Date(),
+    };
+    return this.cards[index];
+  }
+
+  async delete(id: string): Promise<void> {
+    const index = this.cards.findIndex(c => c.id === id && !c.deletedAt);
+    if (index === -1) throw new Error('Card not found');
+
+    this.cards[index].deletedAt = new Date();
+  }
+
+  async count(filters?: any): Promise<number> {
+    let filtered = this.cards.filter(c => !c.deletedAt);
+    if (filters?.cardType) {
+      filtered = filtered.filter(c => c.cardType === filters.cardType);
+    }
+    return filtered.length;
+  }
+
+  async findByName(name: string): Promise<Card | null> {
+    return this.cards.find(c => c.name === name && !c.deletedAt) || null;
+  }
+}
+```
+
 ---
 
 ## 🗓️ 変更履歴
@@ -945,3 +1323,4 @@ export default app;
 | 日付 | バージョン | 変更内容 |
 |------|----------|---------|
 | 2025-11-09 | 1.0 | 初版作成。Hono.js + Prisma + PostgreSQLベースのAPI設計 |
+| 2025-11-09 | 2.0 | 🔵 Repository Pattern実装例を追加。依存性注入、In-Memory Repository実装例を含む |
