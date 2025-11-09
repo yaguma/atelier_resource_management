@@ -7,7 +7,7 @@
 **目的**: ゲームバランス調整、データ管理、コンテンツ追加を容易にする
 **対象ユーザー**: ゲーム開発者、ゲームデザイナー
 **技術スタック**:
-- フロントエンド: React 18+ + Vite + TypeScript + TailwindCSS + React Router
+- フロントエンド: React 18+ + Vite + TypeScript + TailwindCSS + React Router + TanStack Query + Zod + Axios
 - バックエンド: Hono.js + TypeScript + Prisma + PostgreSQL
 
 ## 関連文書
@@ -33,6 +33,9 @@
 - **WRREQ-001-1**: システムのバックエンドはHono.jsで開発されなければならない 🟡 *軽量高速なAPIフレームワークのため*
 - **WRREQ-001-2**: システムのフロントエンドはViteをビルドツールとして使用しなければならない 🟡 *高速な開発体験のため*
 - **WRREQ-001-3**: システムのフロントエンドはReact Routerをルーティングライブラリとして使用しなければならない 🟡 *SPAのルーティング管理のため*
+- **WRREQ-001-4**: システムのフロントエンドはTanStack Query(React Query)でサーバー状態管理を行わなければならない 🟡 *効率的なデータフェッチ・キャッシング・同期のため*
+- **WRREQ-001-5**: システムのフロントエンドはZodでスキーマバリデーションとTypeScript型生成を行わなければならない 🟡 *型安全なバリデーションのため*
+- **WRREQ-001-6**: システムのフロントエンドはAxiosをHTTPクライアントとして使用しなければならない 🟡 *インターセプター、エラーハンドリングの容易さのため*
 - **WRREQ-002**: システムはTypeScriptで型安全に実装されなければならない 🟡 *保守性・品質向上のため*
 - **WRREQ-003**: システムはPostgreSQLをデータベースとして使用しなければならない 🟡 *リレーショナルデータの管理に適している*
 - **WRREQ-004**: システムはPrismaをORMとして使用しなければならない 🟡 *型安全なDB操作のため*
@@ -214,6 +217,145 @@
 
 ---
 
+### 14. APIエンドポイント仕様
+
+#### ベースURL
+- 開発環境: `http://localhost:3000/api`
+- 本番環境: `https://{app-name}.azurewebsites.net/api`
+
+#### 共通レスポンス形式
+
+**成功時:**
+```json
+{
+  "data": { ... },
+  "message": "Success"
+}
+```
+
+**エラー時:**
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "エラーメッセージ",
+    "details": [ ... ]
+  }
+}
+```
+
+#### カード管理API
+
+- **GET /api/cards** - カード一覧取得
+  - クエリパラメータ: `?page=1&limit=20&cardType=MATERIAL&search=炎`
+  - レスポンス: `{ data: { items: Card[], total: number, page: number, limit: number } }`
+
+- **GET /api/cards/:id** - カード詳細取得
+  - パスパラメータ: `id` (UUID)
+  - レスポンス: `{ data: Card }`
+
+- **POST /api/cards** - カード新規作成
+  - リクエストボディ: `{ name, description, cardType, attribute, stabilityValue, energyCost, ... }`
+  - レスポンス: `{ data: Card, message: "カードを作成しました" }`
+
+- **PUT /api/cards/:id** - カード更新
+  - パスパラメータ: `id` (UUID)
+  - リクエストボディ: `{ name?, description?, ... }` (部分更新可)
+  - レスポンス: `{ data: Card, message: "カードを更新しました" }`
+
+- **DELETE /api/cards/:id** - カード削除（ソフトデリート）
+  - パスパラメータ: `id` (UUID)
+  - レスポンス: `{ message: "カードを削除しました" }`
+
+#### 顧客管理API
+
+- **GET /api/customers** - 顧客一覧取得
+  - クエリパラメータ: `?page=1&limit=20&difficulty=3&search=商人`
+  - レスポンス: `{ data: { items: Customer[], total: number, page: number, limit: number } }`
+
+- **GET /api/customers/:id** - 顧客詳細取得
+  - パスパラメータ: `id` (UUID)
+  - レスポンス: `{ data: Customer }`
+
+- **POST /api/customers** - 顧客新規作成
+  - リクエストボディ: `{ name, description, customerType, difficulty, ... }`
+  - レスポンス: `{ data: Customer, message: "顧客を作成しました" }`
+
+- **PUT /api/customers/:id** - 顧客更新
+  - パスパラメータ: `id` (UUID)
+  - リクエストボディ: `{ name?, description?, ... }`
+  - レスポンス: `{ data: Customer, message: "顧客を更新しました" }`
+
+- **DELETE /api/customers/:id** - 顧客削除（ソフトデリート）
+  - パスパラメータ: `id` (UUID)
+  - レスポンス: `{ message: "顧客を削除しました" }`
+
+#### 錬金スタイル管理API
+
+- **GET /api/alchemy-styles** - 錬金スタイル一覧取得
+  - レスポンス: `{ data: AlchemyStyle[] }`
+
+- **GET /api/alchemy-styles/:id** - 錬金スタイル詳細取得
+  - パスパラメータ: `id` (UUID)
+  - レスポンス: `{ data: AlchemyStyle }`
+
+- **POST /api/alchemy-styles** - 錬金スタイル新規作成
+  - リクエストボディ: `{ name, description, characteristics, initialDeckCardIds: string[] }`
+  - レスポンス: `{ data: AlchemyStyle, message: "錬金スタイルを作成しました" }`
+
+- **PUT /api/alchemy-styles/:id** - 錬金スタイル更新
+  - パスパラメータ: `id` (UUID)
+  - リクエストボディ: `{ name?, description?, ... }`
+  - レスポンス: `{ data: AlchemyStyle, message: "錬金スタイルを更新しました" }`
+
+- **DELETE /api/alchemy-styles/:id** - 錬金スタイル削除（ソフトデリート）
+  - パスパラメータ: `id` (UUID)
+  - レスポンス: `{ message: "錬金スタイルを削除しました" }`
+
+#### マップノード管理API
+
+- **GET /api/map-nodes** - マップノード一覧取得
+  - クエリパラメータ: `?nodeType=REQUEST&page=1&limit=20`
+  - レスポンス: `{ data: { items: MapNode[], total: number, page: number, limit: number } }`
+
+- **GET /api/map-nodes/:id** - マップノード詳細取得
+- **POST /api/map-nodes** - マップノード新規作成
+- **PUT /api/map-nodes/:id** - マップノード更新
+- **DELETE /api/map-nodes/:id** - マップノード削除（ソフトデリート）
+
+#### ゲームバランス管理API
+
+- **GET /api/game-balance** - ゲームバランス設定一覧取得
+  - クエリパラメータ: `?category=ENERGY`
+  - レスポンス: `{ data: GameBalance[] }`
+
+- **GET /api/game-balance/:id** - ゲームバランス設定詳細取得
+- **PUT /api/game-balance/:id** - ゲームバランス設定更新
+  - リクエストボディ: `{ settingValue, description? }`
+  - レスポンス: `{ data: GameBalance, message: "設定を更新しました" }`
+
+#### データエクスポート/インポートAPI
+
+- **GET /api/export** - 全データエクスポート
+  - クエリパラメータ: `?resources=cards,customers` (省略時は全データ)
+  - レスポンス: JSONファイルダウンロード
+
+- **POST /api/import** - データインポート
+  - リクエスト: `multipart/form-data` (JSONファイル)
+  - レスポンス: `{ message: "データをインポートしました", imported: { cards: 10, customers: 5 } }`
+
+#### HTTPステータスコード
+
+- **200 OK**: 成功（GET, PUT）
+- **201 Created**: リソース作成成功（POST）
+- **204 No Content**: 削除成功（DELETE）
+- **400 Bad Request**: バリデーションエラー
+- **404 Not Found**: リソースが見つからない
+- **409 Conflict**: 重複エラー（ユニーク制約違反）
+- **500 Internal Server Error**: サーバーエラー
+
+---
+
 ## 非機能要件
 
 ### パフォーマンス
@@ -270,28 +412,128 @@
 
 ## データモデル概要
 
+### 共通フィールド（全エンティティ）
+
+全てのエンティティは以下の共通フィールドを持つ:
+- **id**: String (UUID v4, 主キー)
+- **createdAt**: DateTime (作成日時、自動設定)
+- **updatedAt**: DateTime (更新日時、自動更新)
+- **deletedAt**: DateTime? (削除日時、ソフトデリート用、nullable)
+
 ### 主要エンティティ
 
-1. **Card(カード)**
-   - id, name, description, cardType, attribute, stabilityValue, reactionEffect, energyCost
+#### 1. Card(カード)
 
-2. **Customer(顧客)**
-   - id, name, description, customerType, difficulty, requiredAttribute, qualityCondition, stabilityCondition
+**属性:**
+- id, createdAt, updatedAt, deletedAt (共通フィールド)
+- **name**: String (カード名、最大100文字、必須、ユニーク制約)
+- **description**: String (説明、最大1000文字、必須)
+- **cardType**: Enum (カード系統: MATERIAL, OPERATION, CATALYST, KNOWLEDGE, SPECIAL, ARTIFACT)
+- **attribute**: String (属性値、JSON形式、例: {"fire":5,"water":3})
+- **stabilityValue**: Int (安定値、範囲: -100〜100)
+- **reactionEffect**: String? (反応効果、最大500文字、nullable)
+- **energyCost**: Int (エネルギーコスト、範囲: 0〜5、必須)
+- **imageUrl**: String? (カード画像URL、nullable)
+- **rarity**: Enum? (レア度: COMMON, UNCOMMON, RARE, EPIC, LEGENDARY、nullable)
 
-3. **AlchemyStyle(錬金スタイル)**
-   - id, name, description, initialDeck, characteristics
+**リレーション:**
+- **evolutionFrom**: Card? (進化元カード、1:1、nullable)
+- **evolutionTo**: Card[] (進化先カード、1:N)
+- **initialDeckStyles**: AlchemyStyle[] (このカードを初期デッキに含む錬金スタイル、N:M)
+- **unlockableContent**: UnlockableContent? (このカードのアンロック条件、1:1、nullable)
 
-4. **MapNode(マップノード)**
-   - id, name, nodeType, description, rewards, eventContent
+#### 2. Customer(顧客)
 
-5. **MetaCurrency(メタ通貨)**
-   - id, currencyType, value, description
+**属性:**
+- id, createdAt, updatedAt, deletedAt (共通フィールド)
+- **name**: String (顧客名、最大100文字、必須)
+- **description**: String (説明、最大1000文字、必須)
+- **customerType**: String (顧客タイプ、最大50文字、必須)
+- **difficulty**: Int (難易度、範囲: 1〜5星、必須)
+- **requiredAttribute**: String (必要属性値、JSON形式)
+- **qualityCondition**: Int (品質条件、範囲: 0〜100)
+- **stabilityCondition**: Int (安定性条件、範囲: 0〜100)
+- **rewardFame**: Int (報酬: 名声、範囲: 0〜1000)
+- **rewardKnowledge**: Int (報酬: 知識ポイント、範囲: 0〜1000)
+- **portraitUrl**: String? (顧客ポートレートURL、nullable)
 
-6. **UnlockableContent(アンロック可能コンテンツ)**
-   - id, contentType, contentId, requiredFame, requiredKnowledge
+**リレーション:**
+- **rewardCards**: Card[] (報酬カード、N:M)
+- **mapNodes**: MapNode[] (この顧客が登場するノード、1:N)
+- **unlockableContent**: UnlockableContent? (この顧客のアンロック条件、1:1、nullable)
 
-7. **GameBalance(ゲームバランス)**
-   - id, setting, value, description
+#### 3. AlchemyStyle(錬金スタイル)
+
+**属性:**
+- id, createdAt, updatedAt, deletedAt (共通フィールド)
+- **name**: String (スタイル名、最大100文字、必須、ユニーク制約)
+- **description**: String (説明、最大1000文字、必須)
+- **characteristics**: String (特徴、最大500文字、必須)
+- **iconUrl**: String? (アイコンURL、nullable)
+
+**リレーション:**
+- **initialDeckCards**: Card[] (初期デッキのカード、N:M)
+
+#### 4. MapNode(マップノード)
+
+**属性:**
+- id, createdAt, updatedAt, deletedAt (共通フィールド)
+- **name**: String (ノード名、最大100文字、必須)
+- **nodeType**: Enum (ノードタイプ: REQUEST, MERCHANT, EXPERIMENT, MONSTER, BOSS_REQUEST)
+- **description**: String (説明、最大1000文字、必須)
+- **eventContent**: String (イベント内容、JSON形式、必須)
+- **rewards**: String? (報酬、JSON形式、nullable)
+- **iconUrl**: String? (アイコンURL、nullable)
+
+**リレーション:**
+- **customer**: Customer? (このノードの顧客、N:1、nullable)
+
+#### 5. MetaCurrency(メタ通貨)
+
+**属性:**
+- id, createdAt, updatedAt, deletedAt (共通フィールド)
+- **currencyType**: Enum (通貨タイプ: FAME, KNOWLEDGE、ユニーク制約)
+- **description**: String (説明、最大500文字、必須)
+- **iconUrl**: String? (アイコンURL、nullable)
+
+#### 6. UnlockableContent(アンロック可能コンテンツ)
+
+**属性:**
+- id, createdAt, updatedAt, deletedAt (共通フィールド)
+- **contentType**: Enum (コンテンツタイプ: CARD, CUSTOMER, MATERIAL)
+- **requiredFame**: Int (必要名声、範囲: 0〜10000、デフォルト: 0)
+- **requiredKnowledge**: Int (必要知識ポイント、範囲: 0〜10000、デフォルト: 0)
+
+**リレーション:**
+- **card**: Card? (アンロック対象カード、1:1、nullable)
+- **customer**: Customer? (アンロック対象顧客、1:1、nullable)
+
+#### 7. GameBalance(ゲームバランス)
+
+**属性:**
+- id, createdAt, updatedAt, deletedAt (共通フィールド)
+- **settingKey**: String (設定キー、最大100文字、必須、ユニーク制約)
+- **settingValue**: String (設定値、最大500文字、必須)
+- **description**: String (説明、最大500文字、必須)
+- **category**: Enum (カテゴリ: ENERGY, HAND, STABILITY, PLAYTIME)
+
+**設定例:**
+- `energy_initial_value`: 3 (初期エネルギー)
+- `energy_max_value`: 10 (最大エネルギー)
+- `hand_initial_count`: 5 (初期手札枚数)
+- `hand_draw_count`: 5 (ドロー枚数)
+- `stability_explosion_threshold`: 0 (暴発閾値)
+
+### ER図概要（主要リレーション）
+
+```
+Card 1---* Card (進化関係)
+Card *---* AlchemyStyle (初期デッキ)
+Card 1---? UnlockableContent
+Customer *---* Card (報酬)
+Customer 1---* MapNode
+Customer 1---? UnlockableContent
+```
 
 ---
 
@@ -299,9 +541,22 @@
 
 ### 技術的制約
 
-- フロントエンド: React 18以上、Vite 5.0以上、TypeScript 5.0以上、Node.js 18以上、React Router 6以上
-- バックエンド: Hono.js 4.0以上、TypeScript 5.0以上、Node.js 18以上
-- データベース: PostgreSQL 14以上（開発環境）、Azure Database for PostgreSQL（本番環境）
+- フロントエンド:
+  - React 18以上
+  - Vite 5.0以上
+  - TypeScript 5.0以上
+  - Node.js 18以上
+  - React Router 6以上
+  - TanStack Query (React Query) 5.0以上
+  - Zod 3.0以上
+  - Axios 1.6以上
+- バックエンド:
+  - Hono.js 4.0以上
+  - TypeScript 5.0以上
+  - Node.js 18以上
+- データベース:
+  - PostgreSQL 14以上（開発環境）
+  - Azure Database for PostgreSQL（本番環境）
 - ORM: Prisma 5.0以上
 - デプロイ環境: Azure App Service（フロントエンド・バックエンド共通）
 
@@ -325,7 +580,7 @@
 
 ### Must Have(必須 - MVP範囲)
 
-- WRREQ-001〜008-2(プラットフォーム基盤、React+Vite、Hono.js、Azure App Service含む)
+- WRREQ-001〜008-2(プラットフォーム基盤、React+Vite+TanStack Query+Zod+Axios、Hono.js、Azure App Service含む)
 - WRREQ-012〜018(カード管理機能)
 - WRREQ-021〜026(顧客管理機能)
 - WRREQ-029〜031(錬金スタイル管理機能)
@@ -333,6 +588,8 @@
 - WRREQ-052〜057(基本UI/UX)
 - WRREQ-059〜063(検索・フィルタリング機能)
 - WRREQ-067〜070-2(API設計、Hono.js関連要件含む)
+- APIエンドポイント仕様（カード、顧客、錬金スタイル管理）
+- データモデル（共通フィールド、リレーションシップ定義）
 - WRNFR-001〜006(パフォーマンス・セキュリティ基本)
 - WRNFR-009〜011(保守性基本)
 
@@ -367,20 +624,28 @@
 
 1. プロジェクトセットアップ
    - フロントエンド: React 18+ + Vite + TypeScript + TailwindCSS + React Router
+     - TanStack Query設定（QueryClient、キャッシュ戦略）
+     - Axios設定（ベースURL、インターセプター）
+     - Zod設定（バリデーションスキーマ定義）
    - バックエンド: Hono.js + TypeScript + Prisma + PostgreSQL
    - 開発環境構築(ローカルDB、環境変数設定)
 2. データベーススキーマ設計・マイグレーション(Prisma)
+   - ER図作成
+   - Prismaスキーマ定義（共通フィールド、リレーション）
+   - マイグレーションファイル作成・実行
 3. バックエンドAPI実装
    - Hono.jsルーティング設定
    - カード管理API(CRUD)
    - 顧客管理API(CRUD)
-   - CORS設定、バリデーション、エラーハンドリング
+   - CORS設定、バリデーション（Zod）、エラーハンドリング
 4. フロントエンド実装
    - React Routerルーティング設定
+   - Zodバリデーションスキーマ定義（Card、Customer）
+   - TanStack Queryフック実装（useCards、useCustomers）
+   - Axiosクライアント実装（API呼び出しラッパー）
    - カード管理画面(CRUD)
    - 顧客管理画面(CRUD)
    - 基本的なUI/UX(ダッシュボード、ナビゲーション)
-   - APIクライアント実装(Axios/Fetch)
 5. JSONエクスポート/インポート機能
 
 ### Phase 2: 正式リリース準備 (2〜3週間)
@@ -416,3 +681,4 @@
 | 2025-11-08 | 1.1 | バックエンドをHono.jsに変更。フロントエンド(Next.js)とバックエンド(Hono.js)を明確に分離。API要件、技術的制約、開発フェーズを更新 |
 | 2025-11-08 | 1.2 | デプロイ先をAzure App Serviceに変更。Azure Database for PostgreSQL追加。デプロイスロット、CI/CD設定を開発フェーズに追加 |
 | 2025-11-08 | 1.3 | フロントエンドをNext.jsからReact+Viteに変更。SPA構成、React Router追加。SSR/CSR記述を削除し、SPAアーキテクチャに統一 |
+| 2025-11-08 | 1.4 | High Priority対応: (1)TanStack Query、Zod、Axios要件追加 (2)データモデルのリレーションシップ・共通フィールド定義追加 (3)APIエンドポイント仕様セクション追加 (4)開発フェーズ詳細化 |
