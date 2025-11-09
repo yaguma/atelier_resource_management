@@ -207,18 +207,140 @@ resource-management-webapp
 
 ## Phase 3-A 完了条件
 
-### 必須条件
-- React Router/TanStack Query/Axiosクライアント設定完了
-- Zodバリデーションスキーマ実装
-- 共通コンポーネント（Button、Modal、Toast）実装
-- レイアウトコンポーネント（Sidebar、Header、Breadcrumbs）実装
+### 1. 機能要件の完了確認
 
-### 品質基準
-- ESLint・Prettier整形、TypeScriptコンパイルエラーなし、全テスト通過
-- TanStack Query Devtools状態確認、Toast通知正常表示
+#### 1.1 ルーティング設定（TASK-0028）
+- [ ] `src/router/index.tsx`でReact Router 6のcreateBrowserRouterを使用してルート定義が完了している
+- [ ] 以下のルートが正しく設定されている：`/`, `/cards`, `/cards/new`, `/cards/:id`, `/cards/:id/edit`
+- [ ] `src/App.tsx`でRouterProviderが正しく使用されている
+- [ ] ページコンポーネントのプレースホルダー（CardListPage, CardCreatePage, CardEditPage, CardDetailPage）が作成されている
+- [ ] ブラウザで各ルートに遷移し、プレースホルダーが表示されることを確認
 
-### マイルストーン
-- **M3-A: フロントエンド基盤完成** - Phase 3-A完了時点で達成
+#### 1.2 TanStack Query設定（TASK-0029）
+- [ ] `src/main.tsx`でQueryClientが正しく設定されている（retry=1, refetchOnWindowFocus=false, staleTime=5分）
+- [ ] QueryClientProviderがアプリケーションルートで適用されている
+- [ ] React Query Devtoolsが開発環境で表示される
+- [ ] `src/hooks/useCards.ts`にuseQuery/useMutationのテンプレートカスタムフックが作成されている
+- [ ] queryKey/mutationFn/onSuccessでinvalidateQueriesが正しく実装されている
+- [ ] ブラウザでReact Query Devtoolsを開き、クエリの状態が確認できる
+
+#### 1.3 Axiosクライアント設定（TASK-0030）
+- [ ] `src/api/client.ts`でaxios.createを使用してクライアントが作成されている
+- [ ] baseURLにVITE_API_BASE_URL環境変数が設定されている
+- [ ] Content-Typeヘッダーが適切に設定されている
+- [ ] レスポンスインターセプターでエラーメッセージが表示される
+- [ ] `src/api/cards.ts`でgetCards, getCard, createCard, updateCard, deleteCard関数が実装されている
+- [ ] 型付きレスポンスが正しく定義されている
+- [ ] エラーハンドリングが動作し、トーストでエラーメッセージが表示されることを確認
+
+#### 1.4 Zodバリデーションスキーマ（TASK-0031）
+- [ ] `src/types/card.ts`でcardTypeEnum、cardRarityEnumが定義されている
+- [ ] createCardSchemaがname/description/cardType/rarity/attribute/stabilityValue/energyCost/unlockCondition/tags/imageUrlフィールドを持つ
+- [ ] 日本語エラーメッセージが設定されている
+- [ ] updateCardSchemaがpartial化されている
+- [ ] TypeScript型（CreateCardInput, UpdateCardInput等）がエクスポートされている
+- [ ] react-hook-formとzodResolverで統合されている
+- [ ] formState.errorsで日本語エラーが表示される
+- [ ] 必須フィールド、文字数制限、数値範囲のバリデーションが動作する
+
+#### 1.5 共通コンポーネント - Button（TASK-0032）
+- [ ] `src/components/common/Button.tsx`が実装されている
+- [ ] variant（primary/secondary/danger/ghost）プロパティが動作する
+- [ ] size（sm/md/lg）プロパティが動作する
+- [ ] isLoadingプロパティでローディング状態が表示される
+- [ ] TailwindCSSスタイルが適用されている
+- [ ] focus:ringでフォーカススタイルが適用される
+- [ ] アクセシビリティ対応（aria-*属性）がされている
+- [ ] `src/utils/cn.ts`でclsx + twMergeのクラス名統合が動作する
+- [ ] 各variantでスタイルが正しく適用される
+- [ ] isLoading/disabled時にボタンが無効化される
+
+#### 1.6 共通コンポーネント - Modal（TASK-0033）
+- [ ] `src/components/common/Modal.tsx`が実装されている
+- [ ] isOpen/onClose/title/children/footerプロパティが動作する
+- [ ] 背景オーバーレイが表示される
+- [ ] スクロールロックが動作する
+- [ ] 閉じるボタンが動作する
+- [ ] isOpen true/falseで表示が切り替わる
+- [ ] 背景クリックでonCloseが呼び出される
+
+#### 1.7 共通コンポーネント - Toast（TASK-0034）
+- [ ] `src/contexts/ToastContext.tsx`でToastProvider/useToastフックが実装されている
+- [ ] addToast/removeToast関数が動作する
+- [ ] 5秒自動削除が動作する
+- [ ] ToastContainerが統合されている
+- [ ] `src/components/common/ToastContainer.tsx`でtoast配列が表示される
+- [ ] type別色分け（success/error/info/warning）が動作する
+- [ ] 閉じるボタンが動作する
+- [ ] addToastで通知が表示される
+- [ ] removeToastで通知が削除される
+
+#### 1.8 レイアウトコンポーネント - Sidebar（TASK-0035）
+- [ ] `src/components/layouts/Sidebar.tsx`が実装されている
+- [ ] menuItems配列（cards/customers/alchemy-styles/settings）が定義されている
+- [ ] useLocationでアクティブハイライトが動作する
+- [ ] React Router Linkが使用されている
+- [ ] アイコンが表示される
+- [ ] メニューアイテムがクリック可能
+- [ ] 現在パスに応じてハイライトが変化する
+
+#### 1.9 レイアウトコンポーネント - Header（TASK-0036）
+- [ ] `src/components/layouts/Header.tsx`が実装されている
+- [ ] タイトルが表示される
+- [ ] ユーザー情報が表示される
+- [ ] border-bottomが適用されている
+- [ ] `src/components/layouts/AppLayout.tsx`が実装されている
+- [ ] Sidebar/Header/Breadcrumbs/mainが配置されている
+- [ ] Outletで子コンポーネントが表示される
+- [ ] flexレスポンシブレイアウトが動作する
+- [ ] レイアウトが正しく表示される
+
+#### 1.10 レイアウトコンポーネント - Breadcrumbs（TASK-0037）
+- [ ] `src/components/layouts/Breadcrumbs.tsx`が実装されている
+- [ ] pathNameMapで日本語マッピングが定義されている
+- [ ] useLocationでパスが取得される
+- [ ] ホーム → 中間パス → 現在パスの表示が動作する
+- [ ] 最後の項目はリンクなし
+- [ ] スラッシュ区切りが表示される
+- [ ] パスに応じてパンくずが表示される
+- [ ] 途中のアイテムがクリック可能
+
+### 2. 品質基準の確認
+
+#### 2.1 コード品質
+- [ ] ESLintエラーがない（`npm run lint`で確認）
+- [ ] Prettierでコードが整形されている（`npm run format:check`で確認）
+- [ ] TypeScriptコンパイルエラーがない（`npm run type-check`で確認）
+- [ ] ビルドが成功する（`npm run build`で確認）
+
+#### 2.2 テスト
+- [ ] 全ての単体テストが通過する（`npm run test`で確認）
+- [ ] TDDタスク（TASK-0031, 0032, 0033, 0034, 0035, 0036, 0037）のテストケースが全て実装され通過している
+- [ ] テストカバレッジが要件を満たしている
+
+#### 2.3 動作確認
+- [ ] 開発サーバーが起動する（`npm run dev`で確認）
+- [ ] React Query Devtoolsが開発環境で表示され、クエリの状態が確認できる
+- [ ] Toast通知が正常に表示される（success/error/info/warningの各タイプ）
+- [ ] ページ遷移が正常に動作する
+- [ ] レイアウト（Sidebar、Header、Breadcrumbs）が正しく表示される
+- [ ] レスポンシブデザインが動作する
+
+### 3. ドキュメント
+
+- [ ] 各コンポーネントのPropsインターフェースにJSDocコメントが記述されている
+- [ ] 複雑なロジックにコメントが記述されている
+- [ ] README.mdにセットアップ手順、開発コマンド、フォルダ構成が記述されている
+
+### 4. マイルストーン
+
+- [ ] **M3-A: フロントエンド基盤完成** - 上記の全ての確認項目が完了し、Phase 3-Aが完了している
+
+### 5. 次フェーズへの引き継ぎ事項
+
+- [ ] Phase 3-Bで使用する共通コンポーネント・レイアウトが正しく動作することを確認
+- [ ] APIクライアント・TanStack Queryの設定がPhase 3-Bの実装で使用可能な状態になっている
+- [ ] Zodバリデーションスキーマがカード登録・編集フォームで使用可能な状態になっている
 
 ---
 
@@ -229,3 +351,4 @@ resource-management-webapp
 | 2025-11-09 | 1.0 | 初版作成。10タスク、48時間 |
 | 2025-11-09 | 1.1 | Phase 3を3-Aと3-Bに分割。Day 21-26、6営業日 |
 | 2025-11-09 | 1.2 | コード例削除、実装詳細・完了条件・テスト要件を簡潔化。771行→500行以下に削減 |
+| 2025-11-09 | 1.3 | Phase 3-A完了条件を詳細化。チェックリスト形式で具体的な確認項目を追加 |
