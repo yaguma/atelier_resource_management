@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import { CustomerController } from '../../controllers/customerController';
 import { InMemoryCustomerRepository } from '../../repositories/memory/InMemoryCustomerRepository';
+import { InMemoryCardRepository } from '../../repositories/memory/InMemoryCardRepository';
 import { IRepositoryContainer } from '../../di/container';
-import { RES_001 } from '../../constants/errorCodes';
+import { RES_001, VALID_001 } from '../../constants/errorCodes';
+import { CardType, CardRarity } from '../../types/card';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -43,7 +45,7 @@ describe('CustomerController.getById', () => {
       description: 'テスト用の顧客です',
       customerType: 'regular',
       difficulty: 3,
-      requiredAttribute: 'fire',
+      requiredAttribute: { fire: 50 },
       qualityCondition: 50,
       stabilityCondition: 30,
       rewardFame: 100,
@@ -70,7 +72,7 @@ describe('CustomerController.getById', () => {
     expect(json.data.description).toBe('テスト用の顧客です');
     expect(json.data.customerType).toBe('regular');
     expect(json.data.difficulty).toBe(3);
-    expect(json.data.requiredAttribute).toBe('fire');
+    expect(json.data.requiredAttribute).toEqual({ fire: 50 });
     expect(json.data.qualityCondition).toBe(50);
     expect(json.data.stabilityCondition).toBe(30);
     expect(json.data.rewardFame).toBe(100);
@@ -132,7 +134,7 @@ describe('CustomerController.getById', () => {
       description: '報酬カードがない顧客',
       customerType: 'special',
       difficulty: 1,
-      requiredAttribute: 'water',
+      requiredAttribute: { water: 30 },
       qualityCondition: 20,
       stabilityCondition: 10,
       rewardFame: 50,
@@ -152,5 +154,304 @@ describe('CustomerController.getById', () => {
     expect(json.data.rewardCards).toBeDefined();
     expect(Array.isArray(json.data.rewardCards)).toBe(true);
     expect(json.data.rewardCards).toHaveLength(0);
+  });
+});
+
+/**
+ * 🔵 CustomerController.create テスト
+ * TASK-0024: 顧客作成API実装（POST /api/customers）
+ */
+describe('CustomerController.create', () => {
+  let app: Hono;
+  let customerRepository: InMemoryCustomerRepository;
+  let cardRepository: InMemoryCardRepository;
+  let testCardId1: string;
+  let testCardId2: string;
+
+  beforeEach(async () => {
+    // 🔵 テスト用Honoアプリケーションをセットアップ
+    app = new Hono();
+
+    // 🔵 In-Memory Repositoryを初期化
+    customerRepository = new InMemoryCustomerRepository();
+    cardRepository = new InMemoryCardRepository();
+
+    // 🔵 テスト用のカードデータを作成
+    const card1 = await cardRepository.create({
+      name: 'テストカード1',
+      description: 'テスト用カード1',
+      cardType: CardType.MATERIAL,
+      attribute: { fire: 70 },
+      stabilityValue: 50,
+      reactionEffect: null,
+      energyCost: 10,
+      imageUrl: 'https://example.com/card1.png',
+      rarity: CardRarity.COMMON,
+    });
+    testCardId1 = card1.id;
+
+    const card2 = await cardRepository.create({
+      name: 'テストカード2',
+      description: 'テスト用カード2',
+      cardType: CardType.MATERIAL,
+      attribute: { water: 50 },
+      stabilityValue: 30,
+      reactionEffect: null,
+      energyCost: 5,
+      imageUrl: 'https://example.com/card2.png',
+      rarity: CardRarity.UNCOMMON,
+    });
+    testCardId2 = card2.id;
+
+    // 🔵 Repository コンテナをモック
+    const repositories: IRepositoryContainer = {
+      customerRepository,
+      cardRepository,
+    };
+
+    // 🔵 ミドルウェアでリポジトリコンテナを注入
+    app.use('*', async (c, next) => {
+      c.set('repositories', repositories);
+      await next();
+    });
+
+    // 🔵 POST /api/customers ルートを設定
+    app.post('/api/customers', CustomerController.create);
+  });
+
+  it('必須フィールドで顧客を作成できる', async () => {
+    const customerData = {
+      name: 'テスト顧客',
+      description: 'テスト用の顧客です',
+      customerType: 'regular',
+      difficulty: 3,
+      requiredAttribute: { fire: 50 },
+      qualityCondition: 50,
+      stabilityCondition: 30,
+      rewardFame: 100,
+      rewardKnowledge: 50,
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.data).toBeDefined();
+    expect(json.data.id).toBeDefined();
+    expect(json.data.name).toBe('テスト顧客');
+    expect(json.data.description).toBe('テスト用の顧客です');
+    expect(json.data.customerType).toBe('regular');
+    expect(json.data.difficulty).toBe(3);
+    expect(json.data.qualityCondition).toBe(50);
+    expect(json.data.stabilityCondition).toBe(30);
+    expect(json.data.rewardFame).toBe(100);
+    expect(json.data.rewardKnowledge).toBe(50);
+  });
+
+  it('rewardCardIdsでN:M関連付けできる', async () => {
+    const customerData = {
+      name: 'カード報酬顧客',
+      description: 'カード報酬を持つ顧客',
+      customerType: 'special',
+      difficulty: 4,
+      requiredAttribute: { fire: 70 },
+      qualityCondition: 80,
+      stabilityCondition: 60,
+      rewardFame: 200,
+      rewardKnowledge: 100,
+      rewardCardIds: [testCardId1, testCardId2],
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.data).toBeDefined();
+    expect(json.data.rewardCards).toBeDefined();
+    expect(Array.isArray(json.data.rewardCards)).toBe(true);
+    expect(json.data.rewardCards).toHaveLength(2);
+    expect(json.data.rewardCards[0].id).toBe(testCardId1);
+    expect(json.data.rewardCards[1].id).toBe(testCardId2);
+  });
+
+  it('difficulty範囲外でバリデーションエラー（0以下）', async () => {
+    const customerData = {
+      name: 'テスト顧客',
+      description: 'テスト用の顧客です',
+      customerType: 'regular',
+      difficulty: 0, // 範囲外
+      requiredAttribute: { fire: 50 },
+      qualityCondition: 50,
+      stabilityCondition: 30,
+      rewardFame: 100,
+      rewardKnowledge: 50,
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBeDefined();
+    expect(json.error.code).toBe(VALID_001);
+  });
+
+  it('difficulty範囲外でバリデーションエラー（6以上）', async () => {
+    const customerData = {
+      name: 'テスト顧客',
+      description: 'テスト用の顧客です',
+      customerType: 'regular',
+      difficulty: 6, // 範囲外
+      requiredAttribute: { fire: 50 },
+      qualityCondition: 50,
+      stabilityCondition: 30,
+      rewardFame: 100,
+      rewardKnowledge: 50,
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBeDefined();
+    expect(json.error.code).toBe(VALID_001);
+  });
+
+  it('存在しないrewardCardIdで400エラー（VALID_001）', async () => {
+    const nonExistentCardId = uuidv4();
+    const customerData = {
+      name: 'テスト顧客',
+      description: 'テスト用の顧客です',
+      customerType: 'regular',
+      difficulty: 3,
+      requiredAttribute: { fire: 50 },
+      qualityCondition: 50,
+      stabilityCondition: 30,
+      rewardFame: 100,
+      rewardKnowledge: 50,
+      rewardCardIds: [nonExistentCardId],
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBeDefined();
+    expect(json.error.code).toBe(VALID_001);
+    expect(json.error.message).toContain('報酬カードID');
+    expect(json.error.message).toContain('見つかりません');
+  });
+
+  it('必須フィールドが欠けている場合にバリデーションエラー', async () => {
+    const customerData = {
+      name: 'テスト顧客',
+      // descriptionが欠けている
+      customerType: 'regular',
+      difficulty: 3,
+      requiredAttribute: { fire: 50 },
+      qualityCondition: 50,
+      stabilityCondition: 30,
+      rewardFame: 100,
+      rewardKnowledge: 50,
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBeDefined();
+    expect(json.error.code).toBe(VALID_001);
+  });
+
+  it('作成後にrewardCardsを取得できる', async () => {
+    const customerData = {
+      name: 'カード報酬顧客',
+      description: 'カード報酬を持つ顧客',
+      customerType: 'special',
+      difficulty: 4,
+      requiredAttribute: { fire: 70 },
+      qualityCondition: 80,
+      stabilityCondition: 60,
+      rewardFame: 200,
+      rewardKnowledge: 100,
+      rewardCardIds: [testCardId1],
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.data.rewardCards).toBeDefined();
+    expect(json.data.rewardCards).toHaveLength(1);
+    expect(json.data.rewardCards[0].id).toBe(testCardId1);
+  });
+
+  it('portraitUrlがnullでも正しく作成できる', async () => {
+    const customerData = {
+      name: 'テスト顧客',
+      description: 'テスト用の顧客です',
+      customerType: 'regular',
+      difficulty: 3,
+      requiredAttribute: { fire: 50 },
+      qualityCondition: 50,
+      stabilityCondition: 30,
+      rewardFame: 100,
+      rewardKnowledge: 50,
+      portraitUrl: null,
+    };
+
+    const req = new Request('http://localhost/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customerData),
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(json.data).toBeDefined();
+    expect(json.data.portraitUrl).toBeNull();
   });
 });
