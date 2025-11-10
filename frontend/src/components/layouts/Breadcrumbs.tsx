@@ -19,6 +19,47 @@ const pathNameMap: Record<string, string> = {
 };
 
 /**
+ * UUID形式かどうかを判定
+ */
+const isUUID = (str: string): boolean => {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
+/**
+ * セグメントに応じたラベルを取得
+ */
+const getSegmentLabel = (segment: string, index: number, segments: string[]): string => {
+  // マッピングに存在する場合はそれを使用
+  if (pathNameMap[segment]) {
+    return pathNameMap[segment];
+  }
+
+  // UUID形式の場合は前のセグメントに応じてラベルを決定
+  if (isUUID(segment)) {
+    const prevSegment = index > 0 ? segments[index - 1] : '';
+
+    // 次のセグメントが"edit"の場合は「詳細」を返す
+    const nextSegment = index < segments.length - 1 ? segments[index + 1] : '';
+
+    switch (prevSegment) {
+      case 'cards':
+        return nextSegment === 'edit' ? 'カード詳細' : 'カード詳細';
+      case 'customers':
+        return nextSegment === 'edit' ? '顧客詳細' : '顧客詳細';
+      case 'alchemy-styles':
+        return nextSegment === 'edit' ? '錬金スタイル詳細' : '錬金スタイル詳細';
+      default:
+        return '詳細';
+    }
+  }
+
+  // それ以外はそのまま返す
+  return segment;
+};
+
+/**
  * Breadcrumbs コンポーネント
  */
 export const Breadcrumbs = () => {
@@ -32,7 +73,7 @@ export const Breadcrumbs = () => {
     { path: '/', label: 'ホーム' },
     ...pathSegments.map((segment, index) => {
       const path = `/${pathSegments.slice(0, index + 1).join('/')}`;
-      const label = pathNameMap[segment] || segment;
+      const label = getSegmentLabel(segment, index, pathSegments);
       return { path, label };
     }),
   ];

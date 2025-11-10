@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
+import { ToastProvider } from './contexts/ToastContext';
 
 // QueryClient設定
 const queryClient = new QueryClient({
@@ -21,8 +22,10 @@ if (rootElement) {
   createRoot(rootElement).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <App />
-        <ReactQueryDevtools initialIsOpen={false} />
+        <ToastProvider>
+          <App />
+          <ReactQueryDevtools initialIsOpen={false} />
+        </ToastProvider>
       </QueryClientProvider>
     </StrictMode>,
   );
