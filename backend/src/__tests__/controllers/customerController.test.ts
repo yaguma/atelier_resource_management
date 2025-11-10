@@ -738,3 +738,223 @@ describe('CustomerController.update', () => {
     expect(json.data.rewardCards).toHaveLength(2);
   });
 });
+
+/**
+ * 🔵 CustomerController.delete テスト
+ * TASK-0026: 顧客削除API実装（DELETE /api/customers/:id）
+ */
+describe('CustomerController.delete', () => {
+  let app: Hono;
+  let customerRepository: InMemoryCustomerRepository;
+  let cardRepository: InMemoryCardRepository;
+  let testCustomerId: string;
+
+  beforeEach(async () => {
+    // 🔵 テスト用Honoアプリケーションをセットアップ
+    app = new Hono();
+
+    // 🔵 In-Memory Repositoryを初期化
+    customerRepository = new InMemoryCustomerRepository();
+    cardRepository = new InMemoryCardRepository();
+
+    // 🔵 Repository コンテナをモック
+    const repositories: IRepositoryContainer = {
+      customerRepository,
+      cardRepository,
+    };
+
+    // 🔵 ミドルウェアでリポジトリコンテナを注入
+    app.use('*', async (c, next) => {
+      c.set('repositories', repositories);
+      await next();
+    });
+
+    // 🔵 DELETE /api/customers/:id ルートを設定
+    app.delete('/api/customers/:id', CustomerController.delete);
+    // 🔵 GET /api/customers/:id ルートを設定（削除確認用）
+    app.get('/api/customers/:id', CustomerController.getById);
+    // 🔵 GET /api/customers ルートを設定（一覧確認用）
+    app.get('/api/customers', CustomerController.list);
+
+    // 🔵 テスト用のカードデータを作成
+    const card1 = await cardRepository.create({
+      name: 'テストカード1',
+      description: 'テスト用カード1',
+      cardType: CardType.MATERIAL,
+      attribute: { fire: 70 },
+      stabilityValue: 50,
+      reactionEffect: null,
+      energyCost: 10,
+      imageUrl: 'https://example.com/card1.png',
+      rarity: CardRarity.COMMON,
+    });
+    const card2 = await cardRepository.create({
+      name: 'テストカード2',
+      description: 'テスト用カード2',
+      cardType: CardType.MATERIAL,
+      attribute: { water: 50 },
+      stabilityValue: 30,
+      reactionEffect: null,
+      energyCost: 5,
+      imageUrl: 'https://example.com/card2.png',
+      rarity: CardRarity.UNCOMMON,
+    });
+
+    // 🔵 テスト用の顧客データを作成
+    const customer = await customerRepository.create({
+      name: '削除テスト顧客',
+      description: '削除テスト用の顧客です',
+      customerType: 'regular',
+      difficulty: 3,
+      requiredAttribute: { fire: 50 },
+      qualityCondition: 50,
+      stabilityCondition: 30,
+      rewardFame: 100,
+      rewardKnowledge: 50,
+      portraitUrl: 'https://example.com/portrait.png',
+      rewardCardIds: [card1.id, card2.id],
+    });
+
+    testCustomerId = customer.id;
+  });
+
+  it('顧客削除が成功し、204ステータスが返る', async () => {
+    const req = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'DELETE',
+    });
+
+    const res = await app.fetch(req);
+
+    // 204 No Content - ボディは空
+    expect(res.status).toBe(204);
+    expect(res.body).toBeNull();
+  });
+
+  it('削除後に詳細取得で404エラーが返る', async () => {
+    // 🔵 削除実行
+    const deleteReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'DELETE',
+    });
+    await app.fetch(deleteReq);
+
+    // 🔵 削除後に詳細取得
+    const getReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'GET',
+    });
+    const res = await app.fetch(getReq);
+    const json = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(json.error).toBeDefined();
+    expect(json.error.code).toBe(RES_001);
+  });
+
+  it('削除後に一覧取得で非表示になる', async () => {
+    // 🔵 削除前の件数を確認
+    const beforeReq = new Request('http://localhost/api/customers', {
+      method: 'GET',
+    });
+    const beforeRes = await app.fetch(beforeReq);
+    const beforeJson = await beforeRes.json();
+    const beforeCount = beforeJson.data.total;
+
+    // 🔵 削除実行
+    const deleteReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'DELETE',
+    });
+    await app.fetch(deleteReq);
+
+    // 🔵 削除後の件数を確認
+    const afterReq = new Request('http://localhost/api/customers', {
+      method: 'GET',
+    });
+    const afterRes = await app.fetch(afterReq);
+    const afterJson = await afterRes.json();
+
+    expect(afterJson.data.total).toBe(beforeCount - 1);
+    // 削除した顧客が一覧に含まれないことを確認
+    const deletedCustomer = afterJson.data.items.find((c: any) => c.id === testCustomerId);
+    expect(deletedCustomer).toBeUndefined();
+  });
+
+  it('N:M関連（rewardCards）も削除される', async () => {
+    // 🔵 削除前に顧客を取得してrewardCardsを確認
+    const beforeReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'GET',
+    });
+    const beforeRes = await app.fetch(beforeReq);
+    const beforeJson = await beforeRes.json();
+
+    expect(beforeJson.data.rewardCards).toHaveLength(2);
+
+    // 🔵 削除実行
+    const deleteReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'DELETE',
+    });
+    const deleteRes = await app.fetch(deleteReq);
+
+    expect(deleteRes.status).toBe(204);
+
+    // 🔵 削除後は顧客自体が取得できないので、削除が成功したことを確認
+    const afterReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'GET',
+    });
+    const afterRes = await app.fetch(afterReq);
+
+    expect(afterRes.status).toBe(404);
+  });
+
+  it('存在しないIDで404エラーとRES_001コードが返る', async () => {
+    const nonExistentId = uuidv4();
+    const req = new Request(`http://localhost/api/customers/${nonExistentId}`, {
+      method: 'DELETE',
+    });
+
+    const res = await app.fetch(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(404);
+    expect(json.error).toBeDefined();
+    expect(json.error.code).toBe(RES_001);
+    expect(json.error.message).toBeDefined();
+  });
+
+  it('削除済みの顧客を再度削除しようとすると404エラーが返る', async () => {
+    // 🔵 1回目の削除
+    const firstDeleteReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'DELETE',
+    });
+    const firstRes = await app.fetch(firstDeleteReq);
+    expect(firstRes.status).toBe(204);
+
+    // 🔵 2回目の削除
+    const secondDeleteReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'DELETE',
+    });
+    const secondRes = await app.fetch(secondDeleteReq);
+    const json = await secondRes.json();
+
+    expect(secondRes.status).toBe(404);
+    expect(json.error).toBeDefined();
+    expect(json.error.code).toBe(RES_001);
+  });
+
+  it('ソフトデリート（deletedAt設定）が動作する', async () => {
+    // 🔵 削除実行
+    const deleteReq = new Request(`http://localhost/api/customers/${testCustomerId}`, {
+      method: 'DELETE',
+    });
+    const deleteRes = await app.fetch(deleteReq);
+
+    expect(deleteRes.status).toBe(204);
+
+    // 🔵 Repository経由で直接確認（deletedAtが設定されているか）
+    // InMemoryCustomerRepositoryのcustomers配列を直接確認
+    const allCustomers = (customerRepository as any).customers;
+    const deletedCustomer = allCustomers.find((c: any) => c.id === testCustomerId);
+
+    expect(deletedCustomer).toBeDefined();
+    expect(deletedCustomer.deletedAt).toBeDefined();
+    expect(deletedCustomer.deletedAt).toBeInstanceOf(Date);
+  });
+});
