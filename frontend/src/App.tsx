@@ -1,13 +1,13 @@
-import { QueryTestComponent } from './components/QueryTestComponent';
+/**
+ * App コンポーネント
+ * TASK-0028: React Router設定
+ */
+import { RouterProvider } from 'react-router-dom';
+import { router } from './router';
 import './App.css';
 
 function App() {
-  return (
-    <>
-      <h1>🔧 TASK-0029: TanStack Query 設定検証</h1>
-      <QueryTestComponent />
-    </>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;
