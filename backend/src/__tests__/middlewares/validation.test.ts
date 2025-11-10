@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { validate } from '../../middlewares/validation';
-import { VALID_001 } from '../../constants/errorCodes';
+import { VALID_001, VALID_002 } from '../../constants/errorCodes';
 
 describe('バリデーションミドルウェア', () => {
   describe('bodyバリデーション', () => {
@@ -110,6 +110,55 @@ describe('バリデーションミドルウェア', () => {
       expect(res.status).toBe(400);
       expect(json.error.code).toBe(VALID_001);
       expect(json.error.details[0].field).toBe('age');
+    });
+
+    it('不正なJSON形式の場合、VALID_002エラーを返す', async () => {
+      const app = new Hono();
+      const testSchema = z.object({
+        name: z.string(),
+      });
+
+      app.post('/test', validate(testSchema, 'body'), (c) => {
+        return c.json({ success: true });
+      });
+
+      const req = new Request('http://localhost/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{invalid json}', // 不正なJSON
+      });
+
+      const res = await app.fetch(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe(VALID_002);
+      expect(json.error.message).toBe('リクエストボディのJSON解析に失敗しました');
+      expect(json.error.details).toHaveProperty('reason');
+    });
+
+    it('空のボディの場合、VALID_002エラーを返す', async () => {
+      const app = new Hono();
+      const testSchema = z.object({
+        name: z.string(),
+      });
+
+      app.post('/test', validate(testSchema, 'body'), (c) => {
+        return c.json({ success: true });
+      });
+
+      const req = new Request('http://localhost/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '', // 空のボディ
+      });
+
+      const res = await app.fetch(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.error.code).toBe(VALID_002);
+      expect(json.error.message).toBe('リクエストボディのJSON解析に失敗しました');
     });
   });
 

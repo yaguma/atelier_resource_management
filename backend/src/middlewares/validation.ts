@@ -1,6 +1,6 @@
 import { Context, Next } from 'hono';
 import { ZodSchema, ZodError } from 'zod';
-import { VALID_001 } from '../constants/errorCodes';
+import { VALID_001, VALID_002 } from '../constants/errorCodes';
 import { ValidationErrorDetail } from '../types/index';
 
 /**
@@ -17,7 +17,23 @@ export function validate(schema: ZodSchema, target: 'body' | 'query' = 'body') {
       // ターゲットに応じてデータを取得
       let data: any;
       if (target === 'body') {
-        data = await c.req.json();
+        try {
+          data = await c.req.json();
+        } catch (jsonError) {
+          // JSON解析エラーの処理
+          return c.json(
+            {
+              error: {
+                code: VALID_002,
+                message: 'リクエストボディのJSON解析に失敗しました',
+                details: {
+                  reason: jsonError instanceof Error ? jsonError.message : 'Invalid JSON format',
+                },
+              },
+            },
+            400
+          );
+        }
       } else if (target === 'query') {
         data = c.req.query();
       }
