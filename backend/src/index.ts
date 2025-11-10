@@ -9,6 +9,8 @@ import { prisma, disconnectPrisma } from './utils/prisma';
 import { createRepositoryContainer } from './di/container';
 // 🔵 Card Routes（Phase 2: TASK-0016）
 import cardsRouter from './routes/cards';
+// 🔵 Customer Routes（Phase 2: TASK-0022）
+import customersRouter from './routes/customers';
 
 const app = new Hono();
 
@@ -40,6 +42,7 @@ app.get('/', (c) => {
 
 // 🔵 API Routes
 app.route('/api/cards', cardsRouter);
+app.route('/api/customers', customersRouter);
 
 const port = Number(process.env.PORT) || 3000;
 console.log(`Server is running on port ${port}`);
