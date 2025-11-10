@@ -1,4 +1,6 @@
 import { ICardRepository } from '../repositories/interfaces/ICardRepository';
+import { PrismaCardRepository } from '../repositories/prisma/PrismaCardRepository';
+import { InMemoryCardRepository } from '../repositories/memory/InMemoryCardRepository';
 // 将来的に他のRepositoryもimport
 // import { ICustomerRepository } from '../repositories/interfaces/ICustomerRepository';
 // import { IAlchemyStyleRepository } from '../repositories/interfaces/IAlchemyStyleRepository';
@@ -46,11 +48,17 @@ export function createRepositoryContainer(): IRepositoryContainer {
 
   if (repositoryType === 'memory') {
     // 🔵 テスト環境: In-Memory実装
-    // TODO: Phase 2でIn-Memory実装を追加（TASK-0015C）
-    throw new Error('In-Memory implementation not yet available. Will be implemented in TASK-0015C.');
+    return {
+      cardRepository: new InMemoryCardRepository(),
+      // 将来的に追加
+      // customerRepository: new InMemoryCustomerRepository(),
+    };
   }
 
   // 🔵 本番環境: Prisma実装
-  // TODO: Phase 2でPrisma実装を追加（TASK-0015B）
-  throw new Error('Prisma implementation not yet available. Will be implemented in TASK-0015B.');
+  return {
+    cardRepository: new PrismaCardRepository(),
+    // 将来的に追加
+    // customerRepository: new PrismaCustomerRepository(),
+  };
 }
