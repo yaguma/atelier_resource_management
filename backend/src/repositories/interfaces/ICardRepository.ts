@@ -1,4 +1,4 @@
-import { Card, CreateCardRequest, UpdateCardRequest } from '../../types/card';
+import { Card, CardType, CreateCardRequest, UpdateCardRequest } from '../../types/card';
 import { PaginationOptions, PaginationResult } from '../../types/repository';
 
 /**
@@ -38,7 +38,7 @@ export interface ICardRepository {
    */
   findMany(
     options: PaginationOptions,
-    filters?: { cardType?: string; search?: string }
+    filters?: { cardType?: CardType; search?: string }
   ): Promise<PaginationResult<Card>>;
 
   /**
@@ -60,5 +60,5 @@ export interface ICardRepository {
    * @param filters フィルター条件
    * @returns カード数
    */
-  count(filters?: { cardType?: string }): Promise<number>;
+  count(filters?: { cardType?: CardType }): Promise<number>;
 }

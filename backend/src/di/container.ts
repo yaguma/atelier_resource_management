@@ -25,7 +25,7 @@ export interface IRepositoryContainer {
  * 環境変数REPOSITORY_TYPEに応じてPrisma実装またはIn-Memory実装を返す
  *
  * @returns Repositoryコンテナ
- * @throws Error 実装がまだ利用できない場合
+ * @throws Error 実装がまだ利用できない場合、または不正な環境変数が指定された場合
  *
  * 使用例:
  * ```typescript
@@ -35,6 +35,14 @@ export interface IRepositoryContainer {
  */
 export function createRepositoryContainer(): IRepositoryContainer {
   const repositoryType = process.env.REPOSITORY_TYPE || 'prisma';
+
+  // 🔵 環境変数のバリデーション
+  if (repositoryType !== 'prisma' && repositoryType !== 'memory') {
+    throw new Error(
+      `Invalid REPOSITORY_TYPE: "${repositoryType}". ` +
+      `Expected 'prisma' or 'memory'.`
+    );
+  }
 
   if (repositoryType === 'memory') {
     // 🔵 テスト環境: In-Memory実装
