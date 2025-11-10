@@ -1,8 +1,10 @@
 import { ICardRepository } from '../repositories/interfaces/ICardRepository';
 import { PrismaCardRepository } from '../repositories/prisma/PrismaCardRepository';
 import { InMemoryCardRepository } from '../repositories/memory/InMemoryCardRepository';
+import { ICustomerRepository } from '../repositories/interfaces/ICustomerRepository';
+import { PrismaCustomerRepository } from '../repositories/prisma/PrismaCustomerRepository';
+import { InMemoryCustomerRepository } from '../repositories/memory/InMemoryCustomerRepository';
 // 将来的に他のRepositoryもimport
-// import { ICustomerRepository } from '../repositories/interfaces/ICustomerRepository';
 // import { IAlchemyStyleRepository } from '../repositories/interfaces/IAlchemyStyleRepository';
 
 /**
@@ -14,8 +16,8 @@ import { InMemoryCardRepository } from '../repositories/memory/InMemoryCardRepos
  */
 export interface IRepositoryContainer {
   cardRepository: ICardRepository;
+  customerRepository: ICustomerRepository;
   // 将来的に追加
-  // customerRepository: ICustomerRepository;
   // alchemyStyleRepository: IAlchemyStyleRepository;
   // mapNodeRepository: IMapNodeRepository;
   // metaProgressionRepository: IMetaProgressionRepository;
@@ -50,15 +52,13 @@ export function createRepositoryContainer(): IRepositoryContainer {
     // 🔵 テスト環境: In-Memory実装
     return {
       cardRepository: new InMemoryCardRepository(),
-      // 将来的に追加
-      // customerRepository: new InMemoryCustomerRepository(),
+      customerRepository: new InMemoryCustomerRepository(),
     };
   }
 
   // 🔵 本番環境: Prisma実装
   return {
     cardRepository: new PrismaCardRepository(),
-    // 将来的に追加
-    // customerRepository: new PrismaCustomerRepository(),
+    customerRepository: new PrismaCustomerRepository(),
   };
 }
