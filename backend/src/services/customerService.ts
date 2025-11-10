@@ -1,7 +1,8 @@
 import { ICustomerRepository } from '../repositories/interfaces/ICustomerRepository';
+import { ICardRepository } from '../repositories/interfaces/ICardRepository';
 import { Customer, CreateCustomerRequest, UpdateCustomerRequest } from '../types/customer';
 import { PaginationOptions } from '../types/repository';
-import { ResourceNotFoundError } from '../utils/errors';
+import { ResourceNotFoundError, ValidationError } from '../utils/errors';
 
 /**
  * 🔵 Customer Service
@@ -9,14 +10,28 @@ import { ResourceNotFoundError } from '../utils/errors';
  * ビジネスロジックを実装し、Controllerから呼び出される
  */
 export class CustomerService {
-  constructor(private readonly customerRepository: ICustomerRepository) {}
+  constructor(
+    private readonly customerRepository: ICustomerRepository,
+    private readonly cardRepository: ICardRepository
+  ) {}
 
   /**
    * 🔵 顧客を作成
    * @param data 作成する顧客のデータ
    * @returns 作成された顧客
+   * @throws {ValidationError} 報酬カードIDが存在しない場合
    */
   async createCustomer(data: CreateCustomerRequest): Promise<Customer> {
+    // 🔵 rewardCardIds の存在確認
+    if (data.rewardCardIds && data.rewardCardIds.length > 0) {
+      for (const cardId of data.rewardCardIds) {
+        const card = await this.cardRepository.findById(cardId);
+        if (!card) {
+          throw new ValidationError(`報酬カードID ${cardId} が見つかりません`);
+        }
+      }
+    }
+
     // 🔵 Repositoryで顧客作成
     return await this.customerRepository.create(data);
   }
@@ -56,12 +71,23 @@ export class CustomerService {
    * @param data 更新する顧客のデータ
    * @returns 更新された顧客
    * @throws {ResourceNotFoundError} 顧客が見つからない場合
+   * @throws {ValidationError} 報酬カードIDが存在しない場合
    */
   async updateCustomer(id: string, data: UpdateCustomerRequest): Promise<Customer> {
     // 🔵 顧客の存在チェック
     const existingCustomer = await this.customerRepository.findById(id);
     if (!existingCustomer) {
       throw new ResourceNotFoundError('顧客');
+    }
+
+    // 🔵 rewardCardIds の存在確認
+    if (data.rewardCardIds && data.rewardCardIds.length > 0) {
+      for (const cardId of data.rewardCardIds) {
+        const card = await this.cardRepository.findById(cardId);
+        if (!card) {
+          throw new ValidationError(`報酬カードID ${cardId} が見つかりません`);
+        }
+      }
     }
 
     return await this.customerRepository.update(id, data);
