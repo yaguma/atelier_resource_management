@@ -819,41 +819,41 @@ resource-management-webapp
 6. **🔵 README.md更新**（Phase 2完了内容、Repository Pattern説明、APIエンドポイント一覧）
 
 **完了条件**:
-- [ ] 🔵 In-Memory Repositoryを使ったユニットテストが全て通る
-- [ ] 🔵 Prisma Repositoryを使った統合テストが全て通る
-- [ ] 🔵 環境変数REPOSITORY_TYPEの切り替えが動作する
-- [ ] 全APIエンドポイントが正常に動作する
-- [ ] テストシナリオが全て通る
-- [ ] Prisma Studioでデータが正しく保存される
-- [ ] ソフトデリートが正しく動作する
-- [ ] N:Mリレーション（rewardCards）が正しく動作する
-- [ ] 🔵 全エラーレスポンスに体系的エラーコードが含まれる
-- [ ] README.mdが更新されている（🔵 Repository Pattern説明含む）
+- [x] 🔵 In-Memory Repositoryを使ったユニットテストが全て通る
+- [x] 🔵 Prisma Repositoryを使った統合テストが全て通る
+- [x] 🔵 環境変数REPOSITORY_TYPEの切り替えが動作する
+- [x] 全APIエンドポイントが正常に動作する
+- [x] テストシナリオが全て通る
+- [x] Prisma Studioでデータが正しく保存される
+- [x] ソフトデリートが正しく動作する
+- [x] N:Mリレーション（rewardCards）が正しく動作する
+- [x] 🔵 全エラーレスポンスに体系的エラーコードが含まれる
+- [x] README.mdが更新されている（🔵 Repository Pattern説明含む）
 
 ---
 
 ## Phase 2 完了条件
 
 ### 必須条件
-- [ ] 🔵 Card Repository実装（Prisma + In-Memory）が完了する
-- [ ] 🔵 Customer Repository実装（Prisma + In-Memory）が完了する
-- [ ] 🔵 CardService層が実装される
-- [ ] 🔵 CustomerService層が実装される
-- [ ] カード管理API（GET一覧・詳細、POST、PUT、DELETE）が動作する
-- [ ] 顧客管理API（GET一覧・詳細、POST、PUT、DELETE）が動作する
-- [ ] ページネーション・フィルタリングが動作する
-- [ ] バリデーションエラーが正しく返る（🔵 VALID_001コード）
-- [ ] 依存関係チェックが動作する（カード削除時、🔵 RES_003コード）
-- [ ] N:Mリレーション（顧客報酬カード）が動作する
-- [ ] ソフトデリートが動作する
-- [ ] エラーハンドリングが正しく動作する（🔵 体系的エラーコード）
+- [x] 🔵 Card Repository実装（Prisma + In-Memory）が完了する
+- [x] 🔵 Customer Repository実装（Prisma + In-Memory）が完了する
+- [x] 🔵 CardService層が実装される
+- [x] 🔵 CustomerService層が実装される
+- [x] カード管理API（GET一覧・詳細、POST、PUT、DELETE）が動作する
+- [x] 顧客管理API（GET一覧・詳細、POST、PUT、DELETE）が動作する
+- [x] ページネーション・フィルタリングが動作する
+- [x] バリデーションエラーが正しく返る（🔵 VALID_001コード）
+- [x] 依存関係チェックが動作する（カード削除時、🔵 RES_003コード）
+- [x] N:Mリレーション（顧客報酬カード）が動作する
+- [x] ソフトデリートが動作する
+- [x] エラーハンドリングが正しく動作する（🔵 体系的エラーコード）
 
 ### 品質基準
-- [ ] 🔵 In-Memory Repositoryを使ったユニットテストが通る
-- [ ] 全APIエンドポイントのテストが通る
-- [ ] TypeScriptのコンパイルエラーがない
-- [ ] ESLint・Prettierでコード整形されている
-- [ ] API仕様書と実装が一致している
+- [x] 🔵 In-Memory Repositoryを使ったユニットテストが通る
+- [x] 全APIエンドポイントのテストが通る
+- [x] TypeScriptのコンパイルエラーがない
+- [x] ESLint・Prettierでコード整形されている
+- [x] API仕様書と実装が一致している
 
 ### マイルストーン
 - [x] **M2: バックエンドAPI完成** - Phase 2完了時点で達成
