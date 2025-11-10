@@ -3,10 +3,31 @@ import { HTTPException } from 'hono/http-exception';
 import { RES_001, RES_002, DB_003, SYS_001 } from '../constants/errorCodes';
 
 /**
- * Prismaエラーコード判定
+ * Prismaエラーの型定義
  */
-function isPrismaError(error: any): error is { code: string; meta?: any } {
-  return error && typeof error.code === 'string' && error.code.startsWith('P');
+interface PrismaError extends Error {
+  code: string;
+  meta?: {
+    target?: string[];
+    field_name?: string;
+    [key: string]: any;
+  };
+  clientVersion?: string;
+}
+
+/**
+ * Prismaエラーかどうかを判定する型ガード
+ *
+ * @param error - 判定対象のエラー
+ * @returns Prismaエラーの場合true
+ */
+function isPrismaError(error: unknown): error is PrismaError {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as any).code === 'string' &&
+    (error as any).code.startsWith('P')
+  );
 }
 
 /**
@@ -41,8 +62,7 @@ export function errorHandler(err: Error, c: Context) {
 
     // P2002: ユニーク制約違反
     if (prismaCode === 'P2002') {
-      const meta = err.meta as any;
-      const target = meta?.target ? meta.target.join(', ') : '不明';
+      const target = err.meta?.target ? err.meta.target.join(', ') : '不明';
       return c.json(
         {
           error: {

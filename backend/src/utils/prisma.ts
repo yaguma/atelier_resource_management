@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { isSoftDeleteModel } from '../config/softDelete';
 
 /**
  * Prismaクライアントのシングルトンインスタンス
@@ -52,23 +53,8 @@ function setupSoftDeleteMiddleware(prisma: PrismaClient) {
 
   // SELECT操作にdeletedAt IS NULLフィルタを追加
   prisma.$use(async (params, next) => {
-    // テーブルにdeletedAtフィールドがあるか確認
-    const modelsWithSoftDelete = [
-      'card',
-      'customer',
-      'alchemyStyle',
-      'reward',
-      'mapNode',
-      'metaCurrency',
-      'metaProgress',
-      'metaSkill',
-      'gameSystem',
-    ];
-
-    const modelName = params.model?.toLowerCase();
-
     // deletedAtフィールドを持つモデルのみフィルタを適用
-    if (modelName && modelsWithSoftDelete.includes(modelName)) {
+    if (isSoftDeleteModel(params.model)) {
       if (params.action === 'findUnique' || params.action === 'findFirst') {
         // 既存のwhereに追加
         params.args.where = {
