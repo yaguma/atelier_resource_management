@@ -1,8 +1,8 @@
 import { ICardRepository } from '../repositories/interfaces/ICardRepository';
 import { Card, CardType, CreateCardRequest, UpdateCardRequest } from '../types/card';
 import { PaginationOptions } from '../types/repository';
-import { RES_001, RES_002, RES_003 } from '../constants/errorCodes';
 import { checkCardDependencies } from '../utils/dependencyCheck';
+import { ResourceNotFoundError, DuplicateResourceError, DependencyError } from '../utils/errors';
 
 /**
  * 🔵 Card Service
@@ -16,15 +16,13 @@ export class CardService {
    * 🔵 カードを作成
    * @param data 作成するカードのデータ
    * @returns 作成されたカード
-   * @throws 同名のカードが既に存在する場合（RES_002エラー）
+   * @throws {DuplicateResourceError} 同名のカードが既に存在する場合
    */
   async createCard(data: CreateCardRequest): Promise<Card> {
     // 🔵 重複チェック
     const existing = await this.cardRepository.findByName(data.name);
     if (existing) {
-      const error: any = new Error('同名のカードが既に存在します');
-      error.code = RES_002;
-      throw error;
+      throw new DuplicateResourceError('カード');
     }
 
     // 🔵 Repositoryでカード作成
@@ -50,14 +48,12 @@ export class CardService {
    * 🔵 カード詳細を取得
    * @param id カードID
    * @returns カード
-   * @throws カードが見つからない場合（RES_001エラー）
+   * @throws {ResourceNotFoundError} カードが見つからない場合
    */
   async getCardById(id: string): Promise<Card> {
     const card = await this.cardRepository.findById(id);
     if (!card) {
-      const error: any = new Error('カードが見つかりません');
-      error.code = RES_001;
-      throw error;
+      throw new ResourceNotFoundError('カード');
     }
     return card;
   }
@@ -67,24 +63,21 @@ export class CardService {
    * @param id カードID
    * @param data 更新するカードのデータ
    * @returns 更新されたカード
-   * @throws カードが見つからない場合（RES_001エラー）、または同名のカードが既に存在する場合（RES_002エラー）
+   * @throws {ResourceNotFoundError} カードが見つからない場合
+   * @throws {DuplicateResourceError} 同名のカードが既に存在する場合
    */
   async updateCard(id: string, data: UpdateCardRequest): Promise<Card> {
     // 🔵 カードの存在チェック
     const existingCard = await this.cardRepository.findById(id);
     if (!existingCard) {
-      const error: any = new Error('カードが見つかりません');
-      error.code = RES_001;
-      throw error;
+      throw new ResourceNotFoundError('カード');
     }
 
     // 🔵 名前の重複チェック（名前が変更される場合のみ）
     if (data.name && data.name !== existingCard.name) {
       const duplicateCard = await this.cardRepository.findByName(data.name);
       if (duplicateCard && duplicateCard.id !== id) {
-        const error: any = new Error('同名のカードが既に存在します');
-        error.code = RES_002;
-        throw error;
+        throw new DuplicateResourceError('カード');
       }
     }
 
@@ -94,24 +87,20 @@ export class CardService {
   /**
    * 🔵 カードを削除
    * @param id カードID
-   * @throws カードが見つからない場合（RES_001エラー）、または依存関係がある場合（RES_003エラー）
+   * @throws {ResourceNotFoundError} カードが見つからない場合
+   * @throws {DependencyError} 依存関係がある場合
    */
   async deleteCard(id: string): Promise<void> {
     // 🔵 カードの存在チェック
     const existingCard = await this.cardRepository.findById(id);
     if (!existingCard) {
-      const error: any = new Error('カードが見つかりません');
-      error.code = RES_001;
-      throw error;
+      throw new ResourceNotFoundError('カード');
     }
 
     // 🔵 依存関係チェック
     const dependencies = await checkCardDependencies(id);
     if (dependencies.length > 0) {
-      const error: any = new Error('他のリソースから参照されているため削除できません');
-      error.code = RES_003;
-      error.dependencies = dependencies;
-      throw error;
+      throw new DependencyError(dependencies);
     }
 
     await this.cardRepository.delete(id);

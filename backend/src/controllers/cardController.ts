@@ -2,7 +2,9 @@ import { Context } from 'hono';
 import { CardService } from '../services/cardService';
 import { IRepositoryContainer } from '../di/container';
 import { CardType } from '../types/card';
-import { VALID_001, RES_001, RES_002, RES_003 } from '../constants/errorCodes';
+import { isAppError, ValidationError } from '../utils/errors';
+import { createCardSchema, updateCardSchema, listCardsQuerySchema } from '../schemas/card';
+import { ZodError } from 'zod';
 
 /**
  * 🔵 Card Controller
@@ -22,26 +24,39 @@ export class CardController {
     const cardService = new CardService(repositories.cardRepository);
 
     try {
-      const page = Number(c.req.query('page')) || 1;
-      const limit = Number(c.req.query('limit')) || 20;
-      const cardType = c.req.query('cardType') as CardType | undefined;
-      const search = c.req.query('search');
+      // 🔵 Zodバリデーション
+      const query = listCardsQuerySchema.parse({
+        page: c.req.query('page'),
+        limit: c.req.query('limit'),
+        cardType: c.req.query('cardType'),
+        search: c.req.query('search'),
+      });
 
-      const result = await cardService.getCards(page, limit, { cardType, search });
+      const result = await cardService.getCards(query.page, query.limit, {
+        cardType: query.cardType,
+        search: query.search,
+      });
 
       return c.json({
         data: result,
       });
-    } catch (error: any) {
-      return c.json(
-        {
-          error: {
-            code: error.code || 'SYS_001',
-            message: error.message,
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return c.json(
+          {
+            error: {
+              code: 'VALID_001',
+              message: 'バリデーションエラー',
+              details: error.errors,
+            },
           },
-        },
-        500
-      );
+          400
+        );
+      }
+      if (isAppError(error)) {
+        return c.json({ error: { code: error.code, message: error.message } }, 500);
+      }
+      return c.json({ error: { code: 'SYS_001', message: '内部サーバーエラー' } }, 500);
     }
   }
 
@@ -60,17 +75,12 @@ export class CardController {
       return c.json({
         data: card,
       });
-    } catch (error: any) {
-      const statusCode = error.code === RES_001 ? 404 : 500;
-      return c.json(
-        {
-          error: {
-            code: error.code || 'SYS_001',
-            message: error.message,
-          },
-        },
-        statusCode
-      );
+    } catch (error) {
+      if (isAppError(error)) {
+        const statusCode = error.code === 'RES_001' ? 404 : 500;
+        return c.json({ error: { code: error.code, message: error.message } }, statusCode);
+      }
+      return c.json({ error: { code: 'SYS_001', message: '内部サーバーエラー' } }, 500);
     }
   }
 
@@ -85,20 +95,10 @@ export class CardController {
     try {
       const body = await c.req.json();
 
-      // バリデーション（簡易版）
-      if (!body.name || !body.description || !body.cardType) {
-        return c.json(
-          {
-            error: {
-              code: VALID_001,
-              message: '必須フィールドが不足しています',
-            },
-          },
-          400
-        );
-      }
+      // 🔵 Zodバリデーション
+      const validatedData = createCardSchema.parse(body);
 
-      const card = await cardService.createCard(body);
+      const card = await cardService.createCard(validatedData);
 
       return c.json(
         {
@@ -106,17 +106,25 @@ export class CardController {
         },
         201
       );
-    } catch (error: any) {
-      const statusCode = error.code === RES_002 ? 409 : error.code === VALID_001 ? 400 : 500;
-      return c.json(
-        {
-          error: {
-            code: error.code || 'SYS_001',
-            message: error.message,
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return c.json(
+          {
+            error: {
+              code: 'VALID_001',
+              message: 'バリデーションエラー',
+              details: error.errors,
+            },
           },
-        },
-        statusCode
-      );
+          400
+        );
+      }
+      if (isAppError(error)) {
+        const statusCode =
+          error.code === 'RES_002' ? 409 : error.code === 'VALID_001' ? 400 : 500;
+        return c.json({ error: { code: error.code, message: error.message } }, statusCode);
+      }
+      return c.json({ error: { code: 'SYS_001', message: '内部サーバーエラー' } }, 500);
     }
   }
 
@@ -132,23 +140,33 @@ export class CardController {
       const id = c.req.param('id');
       const body = await c.req.json();
 
-      const card = await cardService.updateCard(id, body);
+      // 🔵 Zodバリデーション
+      const validatedData = updateCardSchema.parse(body);
+
+      const card = await cardService.updateCard(id, validatedData);
 
       return c.json({
         data: card,
       });
-    } catch (error: any) {
-      const statusCode =
-        error.code === RES_001 ? 404 : error.code === RES_002 ? 409 : 500;
-      return c.json(
-        {
-          error: {
-            code: error.code || 'SYS_001',
-            message: error.message,
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return c.json(
+          {
+            error: {
+              code: 'VALID_001',
+              message: 'バリデーションエラー',
+              details: error.errors,
+            },
           },
-        },
-        statusCode
-      );
+          400
+        );
+      }
+      if (isAppError(error)) {
+        const statusCode =
+          error.code === 'RES_001' ? 404 : error.code === 'RES_002' ? 409 : 500;
+        return c.json({ error: { code: error.code, message: error.message } }, statusCode);
+      }
+      return c.json({ error: { code: 'SYS_001', message: '内部サーバーエラー' } }, 500);
     }
   }
 
@@ -164,24 +182,28 @@ export class CardController {
       const id = c.req.param('id');
       await cardService.deleteCard(id);
 
-      return c.json({}, 204);
-    } catch (error: any) {
-      const statusCode =
-        error.code === RES_001 ? 404 : error.code === RES_003 ? 409 : 500;
+      // 204 No Content - ボディは返さない
+      return new Response(null, { status: 204 });
+    } catch (error) {
+      if (isAppError(error)) {
+        const statusCode =
+          error.code === 'RES_001' ? 404 : error.code === 'RES_003' ? 409 : 500;
 
-      // 依存関係エラーの場合は、依存関係情報も含める
-      const errorResponse: any = {
-        error: {
-          code: error.code || 'SYS_001',
-          message: error.message,
-        },
-      };
+        // 依存関係エラーの場合は、依存関係情報も含める
+        const errorResponse: any = {
+          error: {
+            code: error.code,
+            message: error.message,
+          },
+        };
 
-      if (error.code === RES_003 && error.dependencies) {
-        errorResponse.error.dependencies = error.dependencies;
+        if (error.code === 'RES_003' && error.dependencies) {
+          errorResponse.error.dependencies = error.dependencies;
+        }
+
+        return c.json(errorResponse, statusCode);
       }
-
-      return c.json(errorResponse, statusCode);
+      return c.json({ error: { code: 'SYS_001', message: '内部サーバーエラー' } }, 500);
     }
   }
 }

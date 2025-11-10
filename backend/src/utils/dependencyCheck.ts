@@ -18,20 +18,66 @@ export interface DependencyInfo {
  * @returns 依存関係の配列（依存がない場合は空配列）
  */
 export async function checkCardDependencies(cardId: string): Promise<DependencyInfo[]> {
+  // 🔵 並列実行でパフォーマンス向上
+  const [evolutionToCards, initialDeckStyles, rewardCustomers, unlockableContent] =
+    await Promise.all([
+      // 1. 進化元として使用されているか（evolutionTo）
+      prisma.card.findMany({
+        where: {
+          evolutionFromId: cardId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      }),
+      // 2. 初期デッキとして使用されているか（initialDeckStyles）
+      prisma.alchemyStyle.findMany({
+        where: {
+          initialDeckCards: {
+            some: {
+              id: cardId,
+            },
+          },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      }),
+      // 3. 報酬カードとして使用されているか（rewardCustomers）
+      prisma.customer.findMany({
+        where: {
+          rewardCards: {
+            some: {
+              id: cardId,
+            },
+          },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      }),
+      // 4. アンロック可能コンテンツとして使用されているか（unlockableContent）
+      prisma.unlockableContent.findFirst({
+        where: {
+          unlockItemCardId: cardId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          contentType: true,
+        },
+      }),
+    ]);
+
   const dependencies: DependencyInfo[] = [];
 
-  // 1. 進化元として使用されているか（evolutionTo）
-  const evolutionToCards = await prisma.card.findMany({
-    where: {
-      evolutionFromId: cardId,
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      name: true,
-    },
-  });
-
+  // 進化元の依存関係
   for (const card of evolutionToCards) {
     dependencies.push({
       type: 'evolution',
@@ -41,22 +87,7 @@ export async function checkCardDependencies(cardId: string): Promise<DependencyI
     });
   }
 
-  // 2. 初期デッキとして使用されているか（initialDeckStyles）
-  const initialDeckStyles = await prisma.alchemyStyle.findMany({
-    where: {
-      initialDeckCards: {
-        some: {
-          id: cardId,
-        },
-      },
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      name: true,
-    },
-  });
-
+  // 初期デッキの依存関係
   for (const style of initialDeckStyles) {
     dependencies.push({
       type: 'initialDeck',
@@ -66,22 +97,7 @@ export async function checkCardDependencies(cardId: string): Promise<DependencyI
     });
   }
 
-  // 3. 報酬カードとして使用されているか（rewardCustomers）
-  const rewardCustomers = await prisma.customer.findMany({
-    where: {
-      rewardCards: {
-        some: {
-          id: cardId,
-        },
-      },
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      name: true,
-    },
-  });
-
+  // 報酬カードの依存関係
   for (const customer of rewardCustomers) {
     dependencies.push({
       type: 'reward',
@@ -91,18 +107,7 @@ export async function checkCardDependencies(cardId: string): Promise<DependencyI
     });
   }
 
-  // 4. アンロック可能コンテンツとして使用されているか（unlockableContent）
-  const unlockableContent = await prisma.unlockableContent.findFirst({
-    where: {
-      unlockItemCardId: cardId,
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      contentType: true,
-    },
-  });
-
+  // アンロック可能コンテンツの依存関係
   if (unlockableContent) {
     dependencies.push({
       type: 'unlockable',
