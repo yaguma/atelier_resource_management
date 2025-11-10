@@ -20,7 +20,7 @@ export class CustomerController {
     const repositories = c.get('repositories') as IRepositoryContainer;
 
     // 🔵 Service を初期化（Repositoryを注入）
-    const customerService = new CustomerService(repositories.customerRepository);
+    const customerService = new CustomerService(repositories.customerRepository, repositories.cardRepository);
 
     try {
       // 🔵 Zodバリデーション
@@ -65,7 +65,7 @@ export class CustomerController {
    */
   static async getById(c: Context) {
     const repositories = c.get('repositories') as IRepositoryContainer;
-    const customerService = new CustomerService(repositories.customerRepository);
+    const customerService = new CustomerService(repositories.customerRepository, repositories.cardRepository);
 
     try {
       const id = c.req.param('id');
@@ -89,7 +89,7 @@ export class CustomerController {
    */
   static async create(c: Context) {
     const repositories = c.get('repositories') as IRepositoryContainer;
-    const customerService = new CustomerService(repositories.customerRepository);
+    const customerService = new CustomerService(repositories.customerRepository, repositories.cardRepository);
 
     try {
       const body = await c.req.json();
@@ -132,7 +132,7 @@ export class CustomerController {
    */
   static async update(c: Context) {
     const repositories = c.get('repositories') as IRepositoryContainer;
-    const customerService = new CustomerService(repositories.customerRepository);
+    const customerService = new CustomerService(repositories.customerRepository, repositories.cardRepository);
 
     try {
       const id = c.req.param('id');
@@ -173,7 +173,7 @@ export class CustomerController {
    */
   static async delete(c: Context) {
     const repositories = c.get('repositories') as IRepositoryContainer;
-    const customerService = new CustomerService(repositories.customerRepository);
+    const customerService = new CustomerService(repositories.customerRepository, repositories.cardRepository);
 
     try {
       const id = c.req.param('id');
