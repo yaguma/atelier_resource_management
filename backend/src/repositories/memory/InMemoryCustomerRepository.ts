@@ -127,16 +127,18 @@ export class InMemoryCustomerRepository implements ICustomerRepository {
       throw new Error('Customer not found');
     }
 
+    // 🔵 rewardCardIds を分離して、顧客データのみを更新
+    const { rewardCardIds, ...customerData } = data;
     this.customers[index] = {
       ...this.customers[index],
-      ...data,
+      ...customerData,
       updatedAt: new Date(),
     };
 
     // 🔵 N:Mリレーション: rewardCards
-    if (data.rewardCardIds !== undefined) {
-      this.rewardCardRelations.set(id, data.rewardCardIds);
-      this.customers[index].rewardCards = data.rewardCardIds.map((cardId) => ({ id: cardId }));
+    if (rewardCardIds !== undefined) {
+      this.rewardCardRelations.set(id, rewardCardIds);
+      this.customers[index].rewardCards = rewardCardIds.map((cardId) => ({ id: cardId }));
     }
 
     return this.customers[index];

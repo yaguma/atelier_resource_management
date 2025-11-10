@@ -112,15 +112,16 @@ export class PrismaCustomerRepository implements ICustomerRepository {
    * @returns 更新された顧客
    */
   async update(id: string, data: UpdateCustomerRequest): Promise<Customer> {
-    const updateData: any = { ...data };
+    // 🔵 rewardCardIds を分離して、顧客データのみを更新データとする
+    const { rewardCardIds, ...customerData } = data;
+    const updateData: any = { ...customerData };
 
     // 🔵 N:Mリレーション: rewardCards
     // rewardCardIdsが指定されている場合、既存の関連を全て削除して新しい関連を設定
-    if (data.rewardCardIds !== undefined) {
+    if (rewardCardIds !== undefined) {
       updateData.rewardCards = {
-        set: data.rewardCardIds.map((id) => ({ id })),
+        set: rewardCardIds.map((id) => ({ id })),
       };
-      delete updateData.rewardCardIds;
     }
 
     return await prisma.customer.update({
