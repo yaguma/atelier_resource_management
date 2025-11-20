@@ -1,744 +1,58 @@
-// ============================================
-// アトリエ錬金術ゲーム リソース管理Webアプリ
-// TypeScript型定義
-//
-// 🔵 バージョン 2.0 更新内容:
-// - Repository Pattern のインターフェース定義を追加
-// - ICardRepository, ICustomerRepository 等の Repository インターフェース
-// - IRepositoryContainer（依存性注入コンテナ）を追加
-// - Prisma実装とIn-Memory実装を切り替え可能に
-// ============================================
+/**
+ * リソース管理Webアプリ TypeScript型定義
+ * 
+ * 【信頼性レベル】:
+ * - 🔵 青信号: 要件定義書から直接導出された確実な型定義
+ * - 🟡 黄信号: 要件定義書から妥当な推測による型定義
+ * - 🔴 赤信号: 一般的なWebアプリ管理画面のベストプラクティスから推測
+ */
 
-// ============================================
-// 🔵 共通型定義
-// ============================================
+// ============================================================================
+// 共通型定義
+// ============================================================================
 
 /**
- * 🔵 全エンティティの共通フィールド
+ * 共通フィールド（全エンティティ） 🔵
+ * 要件定義書より
  */
 export interface BaseEntity {
-  /** 🔵 UUID v4 (主キー) */
-  id: string;
-  /** 🔵 作成日時 */
+  id: string; // UUID v4
   createdAt: Date;
-  /** 🔵 更新日時 */
   updatedAt: Date;
-  /** 🔵 削除日時（ソフトデリート用、nullable） */
-  deletedAt: Date | null;
+  deletedAt: Date | null; // ソフトデリート用
 }
 
 /**
- * 🔵 属性値（JSON形式）
- * 例: { "fire": 5, "water": 3, "earth": 2 }
- */
-export type AttributeValue = Record<string, number>;
-
-// ============================================
-// 🔵 Enum定義
-// ============================================
-
-/**
- * 🔵 カード系統（WRREQ-012より）
- */
-export enum CardType {
-  /** 素材 */
-  MATERIAL = 'MATERIAL',
-  /** 操作 */
-  OPERATION = 'OPERATION',
-  /** 触媒 */
-  CATALYST = 'CATALYST',
-  /** 知識 */
-  KNOWLEDGE = 'KNOWLEDGE',
-  /** 特殊 */
-  SPECIAL = 'SPECIAL',
-  /** アーティファクト */
-  ARTIFACT = 'ARTIFACT',
-}
-
-/**
- * 🟡 カードレア度
- */
-export enum CardRarity {
-  COMMON = 'COMMON',
-  UNCOMMON = 'UNCOMMON',
-  RARE = 'RARE',
-  EPIC = 'EPIC',
-  LEGENDARY = 'LEGENDARY',
-}
-
-/**
- * 🔵 ノードタイプ（WRREQ-033より）
- */
-export enum NodeType {
-  /** 依頼 */
-  REQUEST = 'REQUEST',
-  /** 商人 */
-  MERCHANT = 'MERCHANT',
-  /** 実験 */
-  EXPERIMENT = 'EXPERIMENT',
-  /** 魔物 */
-  MONSTER = 'MONSTER',
-  /** ボス依頼 */
-  BOSS_REQUEST = 'BOSS_REQUEST',
-}
-
-/**
- * 🔵 メタ通貨タイプ（WRREQ-038より）
- */
-export enum MetaCurrencyType {
-  /** 名声 */
-  FAME = 'FAME',
-  /** 知識ポイント */
-  KNOWLEDGE = 'KNOWLEDGE',
-}
-
-/**
- * 🔵 アンロック可能コンテンツタイプ（WRREQ-039より）
- */
-export enum UnlockableContentType {
-  /** 新カード */
-  CARD = 'CARD',
-  /** 新顧客 */
-  CUSTOMER = 'CUSTOMER',
-  /** 新素材 */
-  MATERIAL = 'MATERIAL',
-}
-
-/**
- * 🔵 ゲームバランス設定カテゴリ（WRREQ-048〜051より）
- */
-export enum GameBalanceCategory {
-  /** エネルギーシステム */
-  ENERGY = 'ENERGY',
-  /** 手札システム */
-  HAND = 'HAND',
-  /** 安定値・暴発 */
-  STABILITY = 'STABILITY',
-  /** プレイ時間 */
-  PLAYTIME = 'PLAYTIME',
-}
-
-// ============================================
-// 🔵 エンティティ定義
-// ============================================
-
-/**
- * 🔵 1. Card（カード）エンティティ
- * WRREQ-012〜018より
- */
-export interface Card extends BaseEntity {
-  /** 🔵 カード名（最大100文字、ユニーク制約） */
-  name: string;
-  /** 🔵 説明（最大1000文字） */
-  description: string;
-  /** 🔵 カード系統 */
-  cardType: CardType;
-  /** 🔵 属性値（JSON形式） */
-  attribute: AttributeValue;
-  /** 🔵 安定値（範囲: -100〜100） */
-  stabilityValue: number;
-  /** 🔵 反応効果（最大500文字、nullable） */
-  reactionEffect: string | null;
-  /** 🔵 エネルギーコスト（範囲: 0〜5） */
-  energyCost: number;
-  /** 🟡 カード画像URL（nullable） */
-  imageUrl: string | null;
-  /** 🟡 レア度（nullable） */
-  rarity: CardRarity | null;
-
-  // リレーション
-  /** 🔵 進化元カード（1:1、nullable） */
-  evolutionFrom: Card | null;
-  /** 🔵 進化元カードID */
-  evolutionFromId: string | null;
-  /** 🔵 進化先カード（1:N） */
-  evolutionTo: Card[];
-  /** 🔵 このカードを初期デッキに含む錬金スタイル（N:M） */
-  initialDeckStyles: AlchemyStyle[];
-  /** 🔵 このカードのアンロック条件（1:1、nullable） */
-  unlockableContent: UnlockableContent | null;
-  /** 🔵 このカードを報酬として持つ顧客（N:M） */
-  rewardCustomers: Customer[];
-}
-
-/**
- * 🔵 2. Customer（顧客）エンティティ
- * WRREQ-021〜028より
- */
-export interface Customer extends BaseEntity {
-  /** 🔵 顧客名（最大100文字） */
-  name: string;
-  /** 🔵 説明（最大1000文字） */
-  description: string;
-  /** 🔵 顧客タイプ（最大50文字） */
-  customerType: string;
-  /** 🔵 難易度（範囲: 1〜5星） */
-  difficulty: number;
-  /** 🔵 必要属性値（JSON形式） */
-  requiredAttribute: AttributeValue;
-  /** 🔵 品質条件（範囲: 0〜100） */
-  qualityCondition: number;
-  /** 🔵 安定性条件（範囲: 0〜100） */
-  stabilityCondition: number;
-  /** 🔵 報酬: 名声（範囲: 0〜1000） */
-  rewardFame: number;
-  /** 🔵 報酬: 知識ポイント（範囲: 0〜1000） */
-  rewardKnowledge: number;
-  /** 🟡 顧客ポートレートURL（nullable） */
-  portraitUrl: string | null;
-
-  // リレーション
-  /** 🔵 報酬カード（N:M） */
-  rewardCards: Card[];
-  /** 🔵 この顧客が登場するノード（1:N） */
-  mapNodes: MapNode[];
-  /** 🔵 この顧客のアンロック条件（1:1、nullable） */
-  unlockableContent: UnlockableContent | null;
-}
-
-/**
- * 🔵 3. AlchemyStyle（錬金スタイル）エンティティ
- * WRREQ-029〜032より
- */
-export interface AlchemyStyle extends BaseEntity {
-  /** 🔵 スタイル名（最大100文字、ユニーク制約） */
-  name: string;
-  /** 🔵 説明（最大1000文字） */
-  description: string;
-  /** 🔵 特徴（最大500文字） */
-  characteristics: string;
-  /** 🟡 アイコンURL（nullable） */
-  iconUrl: string | null;
-
-  // リレーション
-  /** 🔵 初期デッキのカード（N:M） */
-  initialDeckCards: Card[];
-}
-
-/**
- * 🔵 4. MapNode（マップノード）エンティティ
- * WRREQ-033〜037より
- */
-export interface MapNode extends BaseEntity {
-  /** 🔵 ノード名（最大100文字） */
-  name: string;
-  /** 🔵 ノードタイプ */
-  nodeType: NodeType;
-  /** 🔵 説明（最大1000文字） */
-  description: string;
-  /** 🔵 イベント内容（JSON形式） */
-  eventContent: Record<string, any>;
-  /** 🔵 報酬（JSON形式、nullable） */
-  rewards: Record<string, any> | null;
-  /** 🟡 アイコンURL（nullable） */
-  iconUrl: string | null;
-
-  // リレーション
-  /** 🔵 このノードの顧客（N:1、nullable） */
-  customer: Customer | null;
-  /** 🔵 顧客ID */
-  customerId: string | null;
-  /** 🔵 このノードのマップテンプレート（N:1、nullable） */
-  mapTemplate: MapTemplate | null;
-  /** 🔵 マップテンプレートID */
-  mapTemplateId: string | null;
-  /** 🟡 ノードの座標位置（JSON形式: {x: number, y: number}） */
-  position: { x: number; y: number } | null;
-}
-
-/**
- * 🔵 5. MapTemplate（マップテンプレート）エンティティ
- * WRREQ-035〜036より
- */
-export interface MapTemplate extends BaseEntity {
-  /** 🔵 マップ名（最大100文字） */
-  name: string;
-  /** 🔵 説明（最大1000文字） */
-  description: string;
-  /** 🔵 難易度（範囲: 1〜5） */
-  difficulty: number;
-  /** 🔵 ノード数（範囲: 30〜50） */
-  nodeCount: number;
-  /** 🟡 アイコンURL（nullable） */
-  iconUrl: string | null;
-
-  // リレーション
-  /** 🔵 このテンプレートに含まれるノード（1:N） */
-  nodes: MapNode[];
-}
-
-/**
- * 🔵 6. MetaCurrency（メタ通貨）エンティティ
- * WRREQ-038より
- */
-export interface MetaCurrency extends BaseEntity {
-  /** 🔵 通貨タイプ（ユニーク制約） */
-  currencyType: MetaCurrencyType;
-  /** 🔵 説明（最大500文字） */
-  description: string;
-  /** 🟡 アイコンURL（nullable） */
-  iconUrl: string | null;
-}
-
-/**
- * 🔵 7. UnlockableContent（アンロック可能コンテンツ）エンティティ
- * WRREQ-039〜040より
- */
-export interface UnlockableContent extends BaseEntity {
-  /** 🔵 コンテンツタイプ */
-  contentType: UnlockableContentType;
-  /** 🔵 必要名声（範囲: 0〜10000、デフォルト: 0） */
-  requiredFame: number;
-  /** 🔵 必要知識ポイント（範囲: 0〜10000、デフォルト: 0） */
-  requiredKnowledge: number;
-
-  // リレーション
-  /** 🔵 アンロック対象カード（1:1、nullable） */
-  card: Card | null;
-  /** 🔵 カードID */
-  cardId: string | null;
-  /** 🔵 アンロック対象顧客（1:1、nullable） */
-  customer: Customer | null;
-  /** 🔵 顧客ID */
-  customerId: string | null;
-}
-
-/**
- * 🔵 8. GameBalance（ゲームバランス）エンティティ
- * WRREQ-041〜042、WRREQ-048〜051より
- */
-export interface GameBalance extends BaseEntity {
-  /** 🔵 設定キー（最大100文字、ユニーク制約） */
-  settingKey: string;
-  /** 🔵 設定値（最大500文字） */
-  settingValue: string;
-  /** 🔵 説明（最大500文字） */
-  description: string;
-  /** 🔵 カテゴリ */
-  category: GameBalanceCategory;
-}
-
-// ============================================
-// 🔵 API リクエスト/レスポンス型定義
-// ============================================
-
-/**
- * 🔵 共通APIレスポンス
+ * API共通レスポンス型 🔵
+ * 要件定義書より
  */
 export interface ApiResponse<T> {
-  /** 🔵 データ */
-  data?: T;
-  /** 🔴 メッセージ */
+  data: T;
   message?: string;
-  /** 🔴 エラー */
-  error?: ApiError;
 }
 
 /**
- * 🔴 APIエラー
+ * API共通エラーレスポンス型 🔵
+ * 要件定義書より
  */
-export interface ApiError {
-  /** 🔴 エラーコード */
-  code: string;
-  /** 🔴 エラーメッセージ */
-  message: string;
-  /** 🔴 詳細エラー（バリデーションエラー等） */
-  details?: ValidationError[];
+export interface ApiErrorResponse {
+  error: {
+    code: string; // エラーコード（例: VALID_REQUIRED, RES_NOT_FOUND）
+    message: string; // エラーメッセージ
+    details?: unknown[]; // 詳細情報（バリデーションエラーなど）
+  };
 }
 
 /**
- * 🔴 バリデーションエラー
+ * ページネーション型 🔵
+ * 要件定義書より
  */
-export interface ValidationError {
-  /** 🔴 フィールド名 */
-  field: string;
-  /** 🔴 エラーメッセージ */
-  message: string;
+export interface PaginationParams {
+  page: number; // 1始まり
+  limit: number; // デフォルト: 20
 }
 
-/**
- * 🔵 ページネーションレスポンス
- */
 export interface PaginatedResponse<T> {
-  /** 🔵 アイテムリスト */
-  items: T[];
-  /** 🔵 総件数 */
-  total: number;
-  /** 🔵 現在のページ番号 */
-  page: number;
-  /** 🔵 1ページあたりの件数 */
-  limit: number;
-  /** 🟡 総ページ数 */
-  totalPages?: number;
-}
-
-/**
- * 🔵 ページネーションクエリパラメータ
- */
-export interface PaginationQuery {
-  /** 🔵 ページ番号（デフォルト: 1） */
-  page?: number;
-  /** 🔵 1ページあたりの件数（デフォルト: 20） */
-  limit?: number;
-}
-
-// ============================================
-// 🔵 Card API 型定義
-// ============================================
-
-/**
- * 🔵 カード作成リクエスト
- */
-export interface CreateCardRequest {
-  name: string;
-  description: string;
-  cardType: CardType;
-  attribute: AttributeValue;
-  stabilityValue: number;
-  reactionEffect?: string | null;
-  energyCost: number;
-  imageUrl?: string | null;
-  rarity?: CardRarity | null;
-  evolutionFromId?: string | null;
-}
-
-/**
- * 🔵 カード更新リクエスト（部分更新可能）
- */
-export interface UpdateCardRequest {
-  name?: string;
-  description?: string;
-  cardType?: CardType;
-  attribute?: AttributeValue;
-  stabilityValue?: number;
-  reactionEffect?: string | null;
-  energyCost?: number;
-  imageUrl?: string | null;
-  rarity?: CardRarity | null;
-  evolutionFromId?: string | null;
-}
-
-/**
- * 🔵 カード検索クエリパラメータ
- */
-export interface CardQueryParams extends PaginationQuery {
-  /** 🔵 カード系統でフィルタ */
-  cardType?: CardType;
-  /** 🔵 名前で部分一致検索 */
-  search?: string;
-}
-
-/**
- * 🔵 カード一覧レスポンス
- */
-export type CardListResponse = ApiResponse<PaginatedResponse<Card>>;
-
-/**
- * 🔵 カード詳細レスポンス
- */
-export type CardDetailResponse = ApiResponse<Card>;
-
-// ============================================
-// 🔵 Customer API 型定義
-// ============================================
-
-/**
- * 🔵 顧客作成リクエスト
- */
-export interface CreateCustomerRequest {
-  name: string;
-  description: string;
-  customerType: string;
-  difficulty: number;
-  requiredAttribute: AttributeValue;
-  qualityCondition: number;
-  stabilityCondition: number;
-  rewardFame: number;
-  rewardKnowledge: number;
-  portraitUrl?: string | null;
-  /** 🔵 報酬カードIDリスト */
-  rewardCardIds?: string[];
-}
-
-/**
- * 🔵 顧客更新リクエスト（部分更新可能）
- */
-export interface UpdateCustomerRequest {
-  name?: string;
-  description?: string;
-  customerType?: string;
-  difficulty?: number;
-  requiredAttribute?: AttributeValue;
-  qualityCondition?: number;
-  stabilityCondition?: number;
-  rewardFame?: number;
-  rewardKnowledge?: number;
-  portraitUrl?: string | null;
-  rewardCardIds?: string[];
-}
-
-/**
- * 🔵 顧客検索クエリパラメータ
- */
-export interface CustomerQueryParams extends PaginationQuery {
-  /** 🔵 難易度でフィルタ */
-  difficulty?: number;
-  /** 🔵 名前で部分一致検索 */
-  search?: string;
-}
-
-/**
- * 🔵 顧客一覧レスポンス
- */
-export type CustomerListResponse = ApiResponse<PaginatedResponse<Customer>>;
-
-/**
- * 🔵 顧客詳細レスポンス
- */
-export type CustomerDetailResponse = ApiResponse<Customer>;
-
-// ============================================
-// 🔵 AlchemyStyle API 型定義
-// ============================================
-
-/**
- * 🔵 錬金スタイル作成リクエスト
- */
-export interface CreateAlchemyStyleRequest {
-  name: string;
-  description: string;
-  characteristics: string;
-  iconUrl?: string | null;
-  /** 🔵 初期デッキカードIDリスト */
-  initialDeckCardIds: string[];
-}
-
-/**
- * 🔵 錬金スタイル更新リクエスト（部分更新可能）
- */
-export interface UpdateAlchemyStyleRequest {
-  name?: string;
-  description?: string;
-  characteristics?: string;
-  iconUrl?: string | null;
-  initialDeckCardIds?: string[];
-}
-
-/**
- * 🔵 錬金スタイル一覧レスポンス
- */
-export type AlchemyStyleListResponse = ApiResponse<AlchemyStyle[]>;
-
-/**
- * 🔵 錬金スタイル詳細レスポンス
- */
-export type AlchemyStyleDetailResponse = ApiResponse<AlchemyStyle>;
-
-// ============================================
-// 🔵 MapNode API 型定義
-// ============================================
-
-/**
- * 🔵 マップノード作成リクエスト
- */
-export interface CreateMapNodeRequest {
-  name: string;
-  nodeType: NodeType;
-  description: string;
-  eventContent: Record<string, any>;
-  rewards?: Record<string, any> | null;
-  iconUrl?: string | null;
-  customerId?: string | null;
-  mapTemplateId?: string | null;
-  position?: { x: number; y: number } | null;
-}
-
-/**
- * 🔵 マップノード更新リクエスト（部分更新可能）
- */
-export interface UpdateMapNodeRequest {
-  name?: string;
-  nodeType?: NodeType;
-  description?: string;
-  eventContent?: Record<string, any>;
-  rewards?: Record<string, any> | null;
-  iconUrl?: string | null;
-  customerId?: string | null;
-  mapTemplateId?: string | null;
-  position?: { x: number; y: number } | null;
-}
-
-/**
- * 🔵 マップノード検索クエリパラメータ
- */
-export interface MapNodeQueryParams extends PaginationQuery {
-  /** 🔵 ノードタイプでフィルタ */
-  nodeType?: NodeType;
-  /** 🔵 名前で部分一致検索 */
-  search?: string;
-}
-
-/**
- * 🔵 マップノード一覧レスポンス
- */
-export type MapNodeListResponse = ApiResponse<PaginatedResponse<MapNode>>;
-
-/**
- * 🔵 マップノード詳細レスポンス
- */
-export type MapNodeDetailResponse = ApiResponse<MapNode>;
-
-// ============================================
-// 🔵 MapTemplate API 型定義
-// ============================================
-
-/**
- * 🔵 マップテンプレート作成リクエスト
- */
-export interface CreateMapTemplateRequest {
-  name: string;
-  description: string;
-  difficulty: number;
-  nodeCount: number;
-  iconUrl?: string | null;
-  /** 🔵 含めるノードIDリスト */
-  nodeIds?: string[];
-}
-
-/**
- * 🔵 マップテンプレート更新リクエスト（部分更新可能）
- */
-export interface UpdateMapTemplateRequest {
-  name?: string;
-  description?: string;
-  difficulty?: number;
-  nodeCount?: number;
-  iconUrl?: string | null;
-  nodeIds?: string[];
-}
-
-/**
- * 🔵 マップテンプレート検索クエリパラメータ
- */
-export interface MapTemplateQueryParams extends PaginationQuery {
-  /** 🔵 難易度でフィルタ */
-  difficulty?: number;
-  /** 🔵 名前で部分一致検索 */
-  search?: string;
-}
-
-/**
- * 🔵 マップテンプレート一覧レスポンス
- */
-export type MapTemplateListResponse = ApiResponse<PaginatedResponse<MapTemplate>>;
-
-/**
- * 🔵 マップテンプレート詳細レスポンス
- */
-export type MapTemplateDetailResponse = ApiResponse<MapTemplate>;
-
-// ============================================
-// 🔵 GameBalance API 型定義
-// ============================================
-
-/**
- * 🔵 ゲームバランス更新リクエスト
- */
-export interface UpdateGameBalanceRequest {
-  settingValue: string;
-  description?: string;
-}
-
-/**
- * 🔵 ゲームバランス検索クエリパラメータ
- */
-export interface GameBalanceQueryParams {
-  /** 🔵 カテゴリでフィルタ */
-  category?: GameBalanceCategory;
-}
-
-/**
- * 🔵 ゲームバランス一覧レスポンス
- */
-export type GameBalanceListResponse = ApiResponse<GameBalance[]>;
-
-/**
- * 🔵 ゲームバランス詳細レスポンス
- */
-export type GameBalanceDetailResponse = ApiResponse<GameBalance>;
-
-// ============================================
-// 🔵 Export/Import API 型定義
-// ============================================
-
-/**
- * 🔵 エクスポートクエリパラメータ
- */
-export interface ExportQueryParams {
-  /** 🔵 エクスポート対象リソース（カンマ区切り） */
-  resources?: string;
-}
-
-/**
- * 🔵 エクスポートデータ
- */
-export interface ExportData {
-  /** 🔵 エクスポート日時 */
-  exportedAt: string;
-  /** 🔵 バージョン */
-  version: string;
-  /** 🔵 カードデータ */
-  cards?: Card[];
-  /** 🔵 顧客データ */
-  customers?: Customer[];
-  /** 🔵 錬金スタイルデータ */
-  alchemyStyles?: AlchemyStyle[];
-  /** 🔵 マップノードデータ */
-  mapNodes?: MapNode[];
-  /** 🔵 ゲームバランスデータ */
-  gameBalance?: GameBalance[];
-}
-
-/**
- * 🔵 インポート結果
- */
-export interface ImportResult {
-  /** 🔵 カードインポート件数 */
-  cards?: number;
-  /** 🔵 顧客インポート件数 */
-  customers?: number;
-  /** 🔵 錬金スタイルインポート件数 */
-  alchemyStyles?: number;
-  /** 🔵 マップノードインポート件数 */
-  mapNodes?: number;
-  /** 🔵 ゲームバランスインポート件数 */
-  gameBalance?: number;
-}
-
-/**
- * 🔵 インポートレスポンス
- */
-export interface ImportResponse extends ApiResponse<ImportResult> {
-  /** 🔵 インポート統計 */
-  imported: ImportResult;
-}
-
-// ============================================
-// 🔵 Repository インターフェース定義
-// ============================================
-
-/**
- * 🔵 ページネーションオプション
- */
-export interface PaginationOptions {
-  page: number;
-  limit: number;
-}
-
-/**
- * 🔵 ページネーション結果
- */
-export interface PaginationResult<T> {
   items: T[];
   total: number;
   page: number;
@@ -746,277 +60,497 @@ export interface PaginationResult<T> {
   totalPages: number;
 }
 
+// ============================================================================
+// カード関連型定義
+// ============================================================================
+
 /**
- * 🔵 1. Card Repository インターフェース
- * データアクセス層の抽象化（Prisma実装とIn-Memory実装を切り替え可能）
+ * カード系統 🔵
+ * 要件定義書 REQ-022, WRREQ-012より
  */
-export interface ICardRepository {
-  /**
-   * 🔵 カードを作成
-   */
-  create(data: CreateCardRequest): Promise<Card>;
-
-  /**
-   * 🔵 IDでカードを取得
-   */
-  findById(id: string): Promise<Card | null>;
-
-  /**
-   * 🔵 カード一覧を取得（ページネーション、フィルタリング）
-   */
-  findMany(
-    options: PaginationOptions,
-    filters?: CardQueryParams
-  ): Promise<PaginationResult<Card>>;
-
-  /**
-   * 🔵 カードを更新
-   */
-  update(id: string, data: UpdateCardRequest): Promise<Card>;
-
-  /**
-   * 🔵 カードを削除（ソフトデリート）
-   */
-  delete(id: string): Promise<void>;
-
-  /**
-   * 🔵 カードの総数を取得
-   */
-  count(filters?: CardQueryParams): Promise<number>;
-
-  /**
-   * 🔵 名前でカードを検索
-   */
-  findByName(name: string): Promise<Card | null>;
+export enum CardType {
+  MATERIAL = 'MATERIAL', // 素材カード
+  OPERATION = 'OPERATION', // 操作カード
+  CATALYST = 'CATALYST', // 触媒カード
+  KNOWLEDGE = 'KNOWLEDGE', // 知識カード
+  SPECIAL = 'SPECIAL', // 特殊カード
+  ARTIFACT = 'ARTIFACT', // アーティファクト
 }
 
 /**
- * 🔵 2. Customer Repository インターフェース
+ * レア度 🔵
+ * 要件定義書より
  */
-export interface ICustomerRepository {
-  /**
-   * 🔵 顧客を作成
-   */
-  create(data: CreateCustomerRequest): Promise<Customer>;
-
-  /**
-   * 🔵 IDで顧客を取得
-   */
-  findById(id: string): Promise<Customer | null>;
-
-  /**
-   * 🔵 顧客一覧を取得（ページネーション、フィルタリング）
-   */
-  findMany(
-    options: PaginationOptions,
-    filters?: CustomerQueryParams
-  ): Promise<PaginationResult<Customer>>;
-
-  /**
-   * 🔵 顧客を更新
-   */
-  update(id: string, data: UpdateCustomerRequest): Promise<Customer>;
-
-  /**
-   * 🔵 顧客を削除（ソフトデリート）
-   */
-  delete(id: string): Promise<void>;
-
-  /**
-   * 🔵 顧客の総数を取得
-   */
-  count(filters?: CustomerQueryParams): Promise<number>;
+export enum Rarity {
+  COMMON = 'COMMON', // コモン
+  UNCOMMON = 'UNCOMMON', // アンコモン
+  RARE = 'RARE', // レア
+  EPIC = 'EPIC', // エピック
+  LEGENDARY = 'LEGENDARY', // レジェンダリー
 }
 
 /**
- * 🔵 3. AlchemyStyle Repository インターフェース
+ * 属性値型 🔵
+ * 要件定義書より（JSON形式）
  */
-export interface IAlchemyStyleRepository {
-  /**
-   * 🔵 錬金スタイルを作成
-   */
-  create(data: CreateAlchemyStyleRequest): Promise<AlchemyStyle>;
-
-  /**
-   * 🔵 IDで錬金スタイルを取得
-   */
-  findById(id: string): Promise<AlchemyStyle | null>;
-
-  /**
-   * 🔵 錬金スタイル一覧を取得
-   */
-  findAll(): Promise<AlchemyStyle[]>;
-
-  /**
-   * 🔵 錬金スタイルを更新
-   */
-  update(id: string, data: UpdateAlchemyStyleRequest): Promise<AlchemyStyle>;
-
-  /**
-   * 🔵 錬金スタイルを削除（ソフトデリート）
-   */
-  delete(id: string): Promise<void>;
-
-  /**
-   * 🔵 名前で錬金スタイルを検索
-   */
-  findByName(name: string): Promise<AlchemyStyle | null>;
+export interface AttributeValues {
+  fire?: number;
+  water?: number;
+  earth?: number;
+  wind?: number;
+  poison?: number;
+  [key: string]: number | undefined;
 }
 
 /**
- * 🔵 4. MapNode Repository インターフェース
+ * カードエンティティ 🔵
+ * 要件定義書より
  */
-export interface IMapNodeRepository {
-  /**
-   * 🔵 マップノードを作成
-   */
-  create(data: CreateMapNodeRequest): Promise<MapNode>;
-
-  /**
-   * 🔵 IDでマップノードを取得
-   */
-  findById(id: string): Promise<MapNode | null>;
-
-  /**
-   * 🔵 マップノード一覧を取得（ページネーション、フィルタリング）
-   */
-  findMany(
-    options: PaginationOptions,
-    filters?: MapNodeQueryParams
-  ): Promise<PaginationResult<MapNode>>;
-
-  /**
-   * 🔵 マップノードを更新
-   */
-  update(id: string, data: UpdateMapNodeRequest): Promise<MapNode>;
-
-  /**
-   * 🔵 マップノードを削除（ソフトデリート）
-   */
-  delete(id: string): Promise<void>;
-
-  /**
-   * 🔵 マップテンプレートIDでノードを検索
-   */
-  findByMapTemplateId(mapTemplateId: string): Promise<MapNode[]>;
+export interface Card extends BaseEntity {
+  name: string; // 最大100文字、必須、ユニーク制約
+  description: string; // 最大1000文字、必須
+  cardType: CardType; // カード系統
+  attribute: AttributeValues; // JSON形式
+  stabilityValue: number; // 範囲: -100〜100
+  reactionEffect: string | null; // 最大500文字、nullable
+  energyCost: number; // 範囲: 0〜5、必須
+  imageUrl: string | null; // nullable
+  rarity: Rarity | null; // nullable
+  
+  // リレーション
+  evolutionFromId: string | null; // 進化元カードID
+  evolutionFrom?: Card | null; // 進化元カード（1:1）
+  evolutionTo?: Card[]; // 進化先カード（1:N）
+  initialDeckStyles?: AlchemyStyle[]; // 初期デッキに含む錬金スタイル（N:M）
+  unlockableContent?: UnlockableContent | null; // アンロック条件（1:1）
 }
 
 /**
- * 🔵 5. MapTemplate Repository インターフェース
+ * カード作成リクエスト 🔵
+ * 要件定義書より
  */
-export interface IMapTemplateRepository {
-  /**
-   * 🔵 マップテンプレートを作成
-   */
-  create(data: CreateMapTemplateRequest): Promise<MapTemplate>;
-
-  /**
-   * 🔵 IDでマップテンプレートを取得
-   */
-  findById(id: string): Promise<MapTemplate | null>;
-
-  /**
-   * 🔵 マップテンプレート一覧を取得（ページネーション、フィルタリング）
-   */
-  findMany(
-    options: PaginationOptions,
-    filters?: MapTemplateQueryParams
-  ): Promise<PaginationResult<MapTemplate>>;
-
-  /**
-   * 🔵 マップテンプレートを更新
-   */
-  update(id: string, data: UpdateMapTemplateRequest): Promise<MapTemplate>;
-
-  /**
-   * 🔵 マップテンプレートを削除（ソフトデリート）
-   */
-  delete(id: string): Promise<void>;
+export interface CreateCardRequest {
+  name: string;
+  description: string;
+  cardType: CardType;
+  attribute: AttributeValues;
+  stabilityValue: number;
+  reactionEffect?: string | null;
+  energyCost: number;
+  imageUrl?: string | null;
+  rarity?: Rarity | null;
+  evolutionFromId?: string | null;
 }
 
 /**
- * 🔵 6. GameBalance Repository インターフェース
+ * カード更新リクエスト 🔵
+ * 要件定義書より（部分更新可）
  */
-export interface IGameBalanceRepository {
-  /**
-   * 🔵 IDでゲームバランス設定を取得
-   */
-  findById(id: string): Promise<GameBalance | null>;
-
-  /**
-   * 🔵 設定キーでゲームバランス設定を取得
-   */
-  findByKey(settingKey: string): Promise<GameBalance | null>;
-
-  /**
-   * 🔵 ゲームバランス設定一覧を取得（カテゴリでフィルタリング）
-   */
-  findByCategory(category?: GameBalanceCategory): Promise<GameBalance[]>;
-
-  /**
-   * 🔵 ゲームバランス設定を更新
-   */
-  update(id: string, data: UpdateGameBalanceRequest): Promise<GameBalance>;
+export interface UpdateCardRequest {
+  name?: string;
+  description?: string;
+  cardType?: CardType;
+  attribute?: AttributeValues;
+  stabilityValue?: number;
+  reactionEffect?: string | null;
+  energyCost?: number;
+  imageUrl?: string | null;
+  rarity?: Rarity | null;
+  evolutionFromId?: string | null;
 }
 
 /**
- * 🔵 Repository コンテナ（依存性注入用）
+ * カード一覧取得クエリパラメータ 🔵
+ * 要件定義書より
  */
-export interface IRepositoryContainer {
-  cardRepository: ICardRepository;
-  customerRepository: ICustomerRepository;
-  alchemyStyleRepository: IAlchemyStyleRepository;
-  mapNodeRepository: IMapNodeRepository;
-  mapTemplateRepository: IMapTemplateRepository;
-  gameBalanceRepository: IGameBalanceRepository;
+export interface GetCardsQuery extends PaginationParams {
+  search?: string; // カード名での部分一致検索
+  cardType?: CardType; // カード系統でフィルタリング
+  rarity?: Rarity; // レア度でフィルタリング
 }
 
-// ============================================
-// 🟡 フロントエンド専用型定義
-// ============================================
+// ============================================================================
+// 顧客関連型定義
+// ============================================================================
 
 /**
- * 🟡 フォーム状態
+ * 顧客エンティティ 🔵
+ * 要件定義書より
  */
-export interface FormState<T> {
-  /** 🟡 フォームデータ */
-  data: T;
-  /** 🟡 バリデーションエラー */
-  errors: Record<keyof T, string>;
-  /** 🟡 送信中フラグ */
-  isSubmitting: boolean;
-  /** 🟡 ダーティフラグ */
-  isDirty: boolean;
+export interface Customer extends BaseEntity {
+  name: string; // 最大100文字、必須
+  description: string; // 最大1000文字、必須
+  customerType: string; // 顧客タイプ、最大50文字、必須
+  difficulty: number; // 難易度、範囲: 1〜5星、必須
+  requiredAttribute: AttributeValues; // 必要属性値、JSON形式
+  qualityCondition: number; // 品質条件、範囲: 0〜100
+  stabilityCondition: number; // 安定性条件、範囲: 0〜100
+  rewardFame: number; // 報酬: 名声、範囲: 0〜1000
+  rewardKnowledge: number; // 報酬: 知識ポイント、範囲: 0〜1000
+  portraitUrl: string | null; // 顧客ポートレートURL、nullable
+  
+  // リレーション
+  rewardCards?: Card[]; // 報酬カード（N:M）
+  mapNodes?: MapNode[]; // この顧客が登場するノード（1:N）
+  unlockableContent?: UnlockableContent | null; // アンロック条件（1:1）
 }
 
 /**
- * 🟡 UIトースト通知
+ * 顧客作成リクエスト 🔵
+ * 要件定義書より
  */
-export interface Toast {
-  /** 🟡 ID */
-  id: string;
-  /** 🟡 メッセージ */
+export interface CreateCustomerRequest {
+  name: string;
+  description: string;
+  customerType: string;
+  difficulty: number;
+  requiredAttribute: AttributeValues;
+  qualityCondition: number;
+  stabilityCondition: number;
+  rewardFame: number;
+  rewardKnowledge: number;
+  portraitUrl?: string | null;
+  rewardCardIds?: string[]; // 報酬カードID配列（N:M関連付け）
+}
+
+/**
+ * 顧客更新リクエスト 🔵
+ * 要件定義書より（部分更新可）
+ */
+export interface UpdateCustomerRequest {
+  name?: string;
+  description?: string;
+  customerType?: string;
+  difficulty?: number;
+  requiredAttribute?: AttributeValues;
+  qualityCondition?: number;
+  stabilityCondition?: number;
+  rewardFame?: number;
+  rewardKnowledge?: number;
+  portraitUrl?: string | null;
+  rewardCardIds?: string[]; // 報酬カードID配列（N:M関連付け）
+}
+
+/**
+ * 顧客一覧取得クエリパラメータ 🔵
+ * 要件定義書より
+ */
+export interface GetCustomersQuery extends PaginationParams {
+  search?: string; // 顧客名での部分一致検索
+  difficulty?: number; // 難易度でフィルタリング（1〜5）
+  customerType?: string; // 顧客タイプでフィルタリング
+}
+
+// ============================================================================
+// 錬金スタイル関連型定義
+// ============================================================================
+
+/**
+ * 錬金スタイルエンティティ 🔵
+ * 要件定義書より
+ */
+export interface AlchemyStyle extends BaseEntity {
+  name: string; // 最大100文字、必須、ユニーク制約
+  description: string; // 最大1000文字、必須
+  characteristics: string; // 特徴、最大500文字、必須
+  iconUrl: string | null; // アイコンURL、nullable
+  
+  // リレーション
+  initialDeckCards?: Card[]; // 初期デッキのカード（N:M）
+}
+
+/**
+ * 錬金スタイル作成リクエスト 🔵
+ * 要件定義書より
+ */
+export interface CreateAlchemyStyleRequest {
+  name: string;
+  description: string;
+  characteristics: string;
+  iconUrl?: string | null;
+  initialDeckCardIds?: string[]; // 初期デッキのカードID配列（N:M関連付け）
+}
+
+/**
+ * 錬金スタイル更新リクエスト 🔵
+ * 要件定義書より（部分更新可）
+ */
+export interface UpdateAlchemyStyleRequest {
+  name?: string;
+  description?: string;
+  characteristics?: string;
+  iconUrl?: string | null;
+  initialDeckCardIds?: string[]; // 初期デッキのカードID配列（N:M関連付け）
+}
+
+// ============================================================================
+// マップノード関連型定義
+// ============================================================================
+
+/**
+ * ノードタイプ 🔵
+ * 要件定義書 REQ-016, WRREQ-033より
+ */
+export enum NodeType {
+  REQUEST = 'REQUEST', // 依頼
+  MERCHANT = 'MERCHANT', // 商人
+  EXPERIMENT = 'EXPERIMENT', // 実験
+  MONSTER = 'MONSTER', // 魔物
+  BOSS_REQUEST = 'BOSS_REQUEST', // ボス依頼
+}
+
+/**
+ * イベント内容型 🔴
+ * JSON形式（要件定義書より推測）
+ */
+export interface EventContent {
+  type: string;
+  description: string;
+  successReward?: unknown;
+  failurePenalty?: unknown;
+  [key: string]: unknown;
+}
+
+/**
+ * 報酬型 🔴
+ * JSON形式（要件定義書より推測）
+ */
+export interface Rewards {
+  cards?: string[]; // カードID配列
+  fame?: number;
+  knowledge?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * マップノードエンティティ 🔵
+ * 要件定義書より
+ */
+export interface MapNode extends BaseEntity {
+  name: string; // 最大100文字、必須
+  nodeType: NodeType; // ノードタイプ
+  description: string; // 最大1000文字、必須
+  eventContent: EventContent; // イベント内容、JSON形式、必須
+  rewards: Rewards | null; // 報酬、JSON形式、nullable
+  iconUrl: string | null; // アイコンURL、nullable
+  
+  // リレーション
+  customerId: string | null; // このノードの顧客ID（N:1、nullable）
+  customer?: Customer | null; // このノードの顧客
+}
+
+/**
+ * マップノード作成リクエスト 🔵
+ * 要件定義書より
+ */
+export interface CreateMapNodeRequest {
+  name: string;
+  nodeType: NodeType;
+  description: string;
+  eventContent: EventContent;
+  rewards?: Rewards | null;
+  iconUrl?: string | null;
+  customerId?: string | null;
+}
+
+/**
+ * マップノード更新リクエスト 🔵
+ * 要件定義書より（部分更新可）
+ */
+export interface UpdateMapNodeRequest {
+  name?: string;
+  nodeType?: NodeType;
+  description?: string;
+  eventContent?: EventContent;
+  rewards?: Rewards | null;
+  iconUrl?: string | null;
+  customerId?: string | null;
+}
+
+/**
+ * マップノード一覧取得クエリパラメータ 🔵
+ * 要件定義書より
+ */
+export interface GetMapNodesQuery extends PaginationParams {
+  search?: string; // ノード名での部分一致検索
+  nodeType?: NodeType; // ノードタイプでフィルタリング
+}
+
+// ============================================================================
+// メタ通貨関連型定義
+// ============================================================================
+
+/**
+ * 通貨タイプ 🔵
+ * 要件定義書より
+ */
+export enum CurrencyType {
+  FAME = 'FAME', // 名声
+  KNOWLEDGE = 'KNOWLEDGE', // 知識ポイント
+}
+
+/**
+ * メタ通貨エンティティ 🔵
+ * 要件定義書より
+ */
+export interface MetaCurrency extends BaseEntity {
+  currencyType: CurrencyType; // 通貨タイプ、ユニーク制約
+  description: string; // 説明、最大500文字、必須
+  iconUrl: string | null; // アイコンURL、nullable
+}
+
+// ============================================================================
+// アンロック可能コンテンツ関連型定義
+// ============================================================================
+
+/**
+ * コンテンツタイプ 🔵
+ * 要件定義書より
+ */
+export enum ContentType {
+  CARD = 'CARD', // カード
+  CUSTOMER = 'CUSTOMER', // 顧客
+  MATERIAL = 'MATERIAL', // 素材
+}
+
+/**
+ * アンロック可能コンテンツエンティティ 🔵
+ * 要件定義書より
+ */
+export interface UnlockableContent extends BaseEntity {
+  contentType: ContentType; // コンテンツタイプ
+  requiredFame: number; // 必要名声、範囲: 0〜10000、デフォルト: 0
+  requiredKnowledge: number; // 必要知識ポイント、範囲: 0〜10000、デフォルト: 0
+  
+  // リレーション
+  cardId: string | null; // アンロック対象カードID（1:1、nullable）
+  card?: Card | null; // アンロック対象カード
+  customerId: string | null; // アンロック対象顧客ID（1:1、nullable）
+  customer?: Customer | null; // アンロック対象顧客
+}
+
+// ============================================================================
+// ゲームバランス関連型定義
+// ============================================================================
+
+/**
+ * バランス設定カテゴリ 🔵
+ * 要件定義書より
+ */
+export enum BalanceCategory {
+  ENERGY = 'ENERGY', // エネルギー
+  HAND = 'HAND', // 手札
+  STABILITY = 'STABILITY', // 安定性
+  PLAYTIME = 'PLAYTIME', // プレイ時間
+}
+
+/**
+ * ゲームバランスエンティティ 🔵
+ * 要件定義書より
+ */
+export interface GameBalance extends BaseEntity {
+  settingKey: string; // 設定キー、最大100文字、必須、ユニーク制約
+  settingValue: string; // 設定値、最大500文字、必須
+  description: string; // 説明、最大500文字、必須
+  category: BalanceCategory; // カテゴリ
+}
+
+/**
+ * ゲームバランス更新リクエスト 🔵
+ * 要件定義書より
+ */
+export interface UpdateGameBalanceRequest {
+  settingValue: string;
+  description?: string;
+}
+
+/**
+ * ゲームバランス一覧取得クエリパラメータ 🔵
+ * 要件定義書より
+ */
+export interface GetGameBalanceQuery {
+  category?: BalanceCategory; // カテゴリでフィルタリング
+}
+
+// ============================================================================
+// データエクスポート/インポート関連型定義
+// ============================================================================
+
+/**
+ * エクスポートリクエスト 🔵
+ * 要件定義書より
+ */
+export interface ExportRequest {
+  resources?: string[]; // エクスポート対象リソース（省略時は全データ）
+  // 例: ['cards', 'customers', 'alchemyStyles']
+}
+
+/**
+ * インポートリクエスト 🔵
+ * 要件定義書より
+ */
+export interface ImportRequest {
+  file: File; // multipart/form-data
+}
+
+/**
+ * インポートレスポンス 🔵
+ * 要件定義書より
+ */
+export interface ImportResponse {
   message: string;
-  /** 🟡 タイプ */
-  type: 'success' | 'error' | 'warning' | 'info';
-  /** 🟡 表示時間（ミリ秒） */
-  duration?: number;
+  imported: {
+    cards?: number;
+    customers?: number;
+    alchemyStyles?: number;
+    mapNodes?: number;
+    [key: string]: number | undefined;
+  };
 }
 
+// ============================================================================
+// エラーコード型定義
+// ============================================================================
+
 /**
- * 🟡 モーダル状態
+ * エラーコード 🔵
+ * 要件定義書より（体系的エラーコード）
  */
-export interface ModalState {
-  /** 🟡 モーダルが開いているか */
-  isOpen: boolean;
-  /** 🟡 モーダルタイプ */
-  type: 'confirm' | 'error' | 'info';
-  /** 🟡 タイトル */
-  title: string;
-  /** 🟡 メッセージ */
-  message: string;
-  /** 🟡 確認コールバック */
-  onConfirm?: () => void;
-  /** 🟡 キャンセルコールバック */
-  onCancel?: () => void;
+export enum ErrorCode {
+  // 認証・認可エラー（将来実装）
+  AUTH_REQUIRED = 'AUTH_REQUIRED',
+  AUTH_INVALID_TOKEN = 'AUTH_INVALID_TOKEN',
+  AUTH_INSUFFICIENT_PERMISSION = 'AUTH_INSUFFICIENT_PERMISSION',
+  
+  // バリデーションエラー
+  VALID_REQUIRED = 'VALID_REQUIRED',
+  VALID_INVALID_FORMAT = 'VALID_INVALID_FORMAT',
+  VALID_OUT_OF_RANGE = 'VALID_OUT_OF_RANGE',
+  VALID_SCHEMA_ERROR = 'VALID_SCHEMA_ERROR',
+  
+  // リソースエラー
+  RES_NOT_FOUND = 'RES_NOT_FOUND',
+  RES_DUPLICATE = 'RES_DUPLICATE',
+  RES_DEPENDENCY_EXISTS = 'RES_DEPENDENCY_EXISTS',
+  RES_INTEGRITY_ERROR = 'RES_INTEGRITY_ERROR',
+  
+  // データベースエラー
+  DB_CONNECTION_ERROR = 'DB_CONNECTION_ERROR',
+  DB_QUERY_ERROR = 'DB_QUERY_ERROR',
+  DB_TRANSACTION_ERROR = 'DB_TRANSACTION_ERROR',
+  
+  // Repositoryエラー
+  REPO_NOT_FOUND = 'REPO_NOT_FOUND',
+  REPO_CREATE_ERROR = 'REPO_CREATE_ERROR',
+  REPO_UPDATE_ERROR = 'REPO_UPDATE_ERROR',
+  REPO_DELETE_ERROR = 'REPO_DELETE_ERROR',
+  
+  // システムエラー
+  SYS_INTERNAL_ERROR = 'SYS_INTERNAL_ERROR',
+  SYS_UNKNOWN_ERROR = 'SYS_UNKNOWN_ERROR',
+  
+  // ネットワークエラー
+  NET_TIMEOUT = 'NET_TIMEOUT',
+  NET_CONNECTION_ERROR = 'NET_CONNECTION_ERROR',
 }
+

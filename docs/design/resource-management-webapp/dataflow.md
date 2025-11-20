@@ -1,428 +1,363 @@
 # データフロー図
 
-## 🔵 システム全体のデータフロー
-
-### アーキテクチャ概要図
-
-```mermaid
-flowchart TB
-    subgraph Frontend["🔵 フロントエンド (React SPA)"]
-        UI[ユーザーインターフェース]
-        Router[React Router]
-        TQ[TanStack Query<br/>キャッシュ・状態管理]
-        Axios[Axiosクライアント]
-        Zod[Zodバリデーション]
-    end
-
-    subgraph Backend["🔵 バックエンド (Hono.js API)"]
-        CORS[CORSミドルウェア]
-        Valid[バリデーション<br/>ミドルウェア]
-        Routes[APIルート]
-        Controller[コントローラー]
-        Service[サービス層]
-        RepoInterface[🔵 Repository<br/>Interface]
-    end
-
-    subgraph DataAccess["🔵 データアクセス層"]
-        PrismaRepo[🔵 Prisma<br/>Repository]
-        MemoryRepo[🔵 In-Memory<br/>Repository]
-    end
-
-    subgraph Database["🔵 データベース (PostgreSQL)"]
-        DB[(PostgreSQL)]
-    end
-
-    User((🔵 ユーザー<br/>ゲーム開発者)) --> UI
-    UI --> Router
-    Router --> TQ
-    TQ --> Axios
-    Zod -.バリデーション.-> TQ
-
-    Axios -->|🔵 HTTP Request| CORS
-    CORS --> Valid
-    Valid --> Routes
-    Routes --> Controller
-    Controller --> Service
-    Service --> RepoInterface
-
-    RepoInterface -->|本番環境| PrismaRepo
-    RepoInterface -.->|テスト環境| MemoryRepo
-    PrismaRepo --> DB
-    MemoryRepo -.->|メモリ内データ| MemoryRepo
-
-    DB -->|🔵 Data| PrismaRepo
-    PrismaRepo --> RepoInterface
-    MemoryRepo -.-> RepoInterface
-    RepoInterface --> Service
-    Service --> Controller
-    Controller --> Routes
-    Routes -->|🔵 JSON Response| Axios
-    Axios --> TQ
-    TQ --> UI
-    UI --> User
-```
-
----
-
-## 🔵 ユーザーインタラクションフロー
-
-### 1. カード作成フロー
+## ユーザーインタラクションフロー
 
 ```mermaid
 flowchart TD
-    A[🔵 ユーザーが<br/>「新規カード作成」<br/>ボタンをクリック] --> B[🟡 カード作成<br/>フォーム表示]
-    B --> C{🟡 ユーザーが<br/>フォーム入力}
-    C --> D[🔵 Zodで<br/>クライアント側<br/>バリデーション]
-    D --> E{🟡 バリデーション<br/>成功?}
-    E -->|No| F[🔴 エラーメッセージ<br/>フォーム下に表示]
-    F --> C
-    E -->|Yes| G[🔵 TanStack Query<br/>Mutation実行]
-    G --> H[🔵 Axios POST<br/>/api/cards]
-    H --> I[🔵 Hono.js<br/>バリデーション<br/>ミドルウェア]
-    I --> J{🟡 バリデーション<br/>成功?}
-    J -->|No| K[🔴 400 Bad Request<br/>エラーレスポンス]
-    K --> L[🔴 フロントエンド<br/>エラー表示]
-    J -->|Yes| M[🔵 Controller:<br/>cardController.create]
-    M --> N[🔵 Service:<br/>cardService.create]
-    N --> O[🔵 Repository:<br/>ICardRepository.create]
-    O --> P{🔵 環境判定}
-    P -->|本番| Q1[🔵 PrismaRepository]
-    P -.->|テスト| R1[🔵 InMemoryRepository]
-    Q1 --> S1[(🔵 PostgreSQL<br/>INSERT)]
-    R1 -.-> T1[(🔵 Memory<br/>Array.push)]
-    S1 --> U1[🔵 新規カードデータ<br/>返却]
-    T1 -.-> U1
-    U1 --> V[🔵 201 Created<br/>レスポンス]
-    V --> W[🔵 TanStack Query<br/>キャッシュ無効化]
-    W --> X[🔴 トースト通知<br/>「カードを作成しました」]
-    X --> Y[🟡 カード一覧画面に<br/>リダイレクト]
+    A[ユーザー] -->|操作| B[React Component]
+    B -->|状態更新| C[TanStack Query]
+    C -->|API呼び出し| D[Axios HTTP Client]
+    D -->|HTTP Request| E[Hono.js API]
+    E -->|ルーティング| F[Controller]
+    F -->|ビジネスロジック| G[Service Layer]
+    G -->|データアクセス| H[Repository]
+    H -->|ORM| I[Prisma]
+    I -->|SQL| J[PostgreSQL]
+    J -->|データ| I
+    I -->|結果| H
+    H -->|結果| G
+    G -->|結果| F
+    F -->|HTTP Response| E
+    E -->|JSON| D
+    D -->|データ| C
+    C -->|キャッシュ更新| C
+    C -->|UI更新| B
+    B -->|表示| A
 ```
+
+**【信頼性レベル】**:
+- 🔵 **青信号**: 要件定義書から直接導出された確実な設計
+- 🟡 **黄信号**: 要件定義書から妥当な推測による設計
+- 🔴 **赤信号**: 一般的なWebアプリ管理画面のベストプラクティスから推測
 
 ---
 
-### 2. カード一覧取得・検索フロー
+## データ処理フロー（シーケンス図）
 
-```mermaid
-flowchart TD
-    A[🔵 ユーザーが<br/>カード一覧画面に<br/>アクセス] --> B[🟡 TanStack Query<br/>キャッシュ確認]
-    B --> C{🟡 キャッシュ有効?}
-    C -->|Yes| D[🔵 キャッシュから<br/>データ表示]
-    C -->|No| E[🔵 Axios GET<br/>/api/cards?page=1&limit=20]
-    E --> F[🔵 Hono.js<br/>GET /api/cards]
-    F --> G[🔵 Controller:<br/>cardController.list]
-    G --> H[🔵 Service:<br/>cardService.findMany]
-    H --> H1[🔵 Repository:<br/>ICardRepository.findMany]
-    H1 --> H2{🔵 環境判定}
-    H2 -->|本番| H3[🔵 PrismaRepository]
-    H2 -.->|テスト| H4[🔵 InMemoryRepository]
-    H3 --> I[(🔵 PostgreSQL<br/>SELECT)]
-    H4 -.-> I1[(🔵 Memory<br/>Array.filter)]
-    I --> J[🔵 カードリスト<br/>+ 総件数]
-    I1 -.-> J
-    J --> L[🔵 200 OK<br/>ページネーション<br/>レスポンス]
-    L --> M[🔵 TanStack Query<br/>キャッシュ保存]
-    M --> N[🟡 UIにデータ表示]
-
-    N --> O{🔵 ユーザーが<br/>検索条件入力?}
-    O -->|Yes| P[🟡 React Router<br/>URLクエリ更新<br/>?search=炎&cardType=MATERIAL]
-    P --> Q[🔵 TanStack Query<br/>再フェッチ]
-    Q --> E
-```
-
----
-
-### 3. カード更新フロー
+### カード一覧取得フロー
 
 ```mermaid
 sequenceDiagram
-    participant U as 🔵 ユーザー
-    participant UI as 🟡 React Component
-    participant TQ as 🔵 TanStack Query
-    participant API as 🔵 Hono.js API
-    participant DB as 🔵 PostgreSQL
+    participant U as ユーザー
+    participant C as React Component
+    participant Q as TanStack Query
+    participant A as Axios
+    participant H as Hono.js
+    participant Ctrl as Controller
+    participant Svc as Service
+    participant Repo as Repository
+    participant P as Prisma
+    participant DB as PostgreSQL
 
-    U->>UI: カード編集ボタンクリック
-    UI->>TQ: useCard(id) でデータ取得
-    TQ-->>UI: 既存カードデータ表示
-    UI->>U: フォームに既存値を表示
-
-    U->>UI: フィールド編集
-    UI->>UI: Zodバリデーション
-
-    U->>UI: 保存ボタンクリック
-    UI->>TQ: Mutation (PUT /api/cards/:id)
-    TQ->>API: Axios PUT リクエスト
-    API->>API: バリデーション
-    API->>DB: Prisma card.update
-    DB-->>API: 更新済みカード
-    API-->>TQ: 200 OK + データ
-    TQ->>TQ: キャッシュ更新
-    TQ-->>UI: 成功レスポンス
-    UI->>U: トースト通知「カードを更新しました」
-    UI->>UI: カード詳細画面にリダイレクト
+    U->>C: 画面表示
+    C->>Q: useQuery('cards')
+    alt キャッシュにデータがある
+        Q-->>C: キャッシュデータ返却
+    else キャッシュにデータがない
+        Q->>A: GET /api/cards
+        A->>H: HTTP Request
+        H->>Ctrl: ルーティング
+        Ctrl->>Svc: getCards(params)
+        Svc->>Repo: findAll(params)
+        Repo->>P: prisma.card.findMany()
+        P->>DB: SELECT * FROM cards
+        DB-->>P: データ返却
+        P-->>Repo: Card[]
+        Repo-->>Svc: Card[]
+        Svc-->>Ctrl: Card[]
+        Ctrl-->>H: JSON Response
+        H-->>A: HTTP 200 OK
+        A-->>Q: データ返却
+        Q->>Q: キャッシュに保存
+        Q-->>C: データ返却
+    end
+    C->>U: 画面表示
 ```
 
----
-
-### 4. カード削除フロー（ソフトデリート）
-
-```mermaid
-flowchart TD
-    A[🔵 ユーザーが<br/>削除ボタンクリック] --> B[🔴 確認ダイアログ表示<br/>「このカードを削除しますか?」]
-    B --> C{🟡 ユーザーが<br/>確認?}
-    C -->|No| D[🟡 ダイアログ閉じる]
-    C -->|Yes| E[🔵 TanStack Query<br/>Mutation実行]
-    E --> F[🔵 Axios DELETE<br/>/api/cards/:id]
-    F --> G[🔵 Controller:<br/>cardController.delete]
-    G --> H[🔵 Service:<br/>cardService.softDelete]
-    H --> I{🔴 依存関係チェック<br/>このカードを使用中?}
-    I -->|Yes| J[🔴 409 Conflict<br/>「他のリソースから<br/>参照されています」]
-    J --> K[🔴 エラーモーダル表示]
-    I -->|No| L[🔵 Prisma:<br/>card.update<br/>deletedAt = now]
-    L --> M[(🔵 PostgreSQL<br/>UPDATE)]
-    M --> N[🔵 204 No Content]
-    N --> O[🔵 TanStack Query<br/>キャッシュ無効化]
-    O --> P[🔴 トースト通知<br/>「カードを削除しました」]
-    P --> Q[🟡 カード一覧を<br/>再取得]
-```
-
----
-
-## 🔵 データ処理フロー（詳細）
-
-### カードデータの流れ
+### カード作成フロー
 
 ```mermaid
 sequenceDiagram
-    participant User as 🔵 ユーザー
-    participant Form as 🟡 CardForm<br/>Component
-    participant Zod as 🔵 Zodスキーマ
-    participant TQ as 🔵 TanStack Query
-    participant Axios as 🔵 Axiosクライアント
-    participant Hono as 🔵 Hono.js API
-    participant Controller as 🔵 CardController
-    participant Service as 🔵 CardService
-    participant Repo as 🔵 ICardRepository
-    participant PrismaRepo as 🔵 PrismaRepository
-    participant MemoryRepo as 🔵 InMemoryRepository
-    participant DB as 🔵 PostgreSQL
+    participant U as ユーザー
+    participant C as React Component
+    participant F as React Hook Form
+    participant Z as Zod
+    participant Q as TanStack Query
+    participant A as Axios
+    participant H as Hono.js
+    participant Ctrl as Controller
+    participant Svc as Service
+    participant Repo as Repository
+    participant P as Prisma
+    participant DB as PostgreSQL
 
-    User->>Form: フォーム入力<br/>(name, cardType, energyCost...)
-    Form->>Zod: クライアント側バリデーション
-
-    alt 🔴 バリデーションエラー
-        Zod-->>Form: バリデーションエラー
-        Form-->>User: エラーメッセージ表示
-    else 🟡 バリデーション成功
-        Zod-->>Form: OK
-        Form->>TQ: useMutation.mutate(cardData)
-        TQ->>Axios: POST /api/cards
-        Axios->>Hono: HTTP Request<br/>Content-Type: application/json
-
-        Hono->>Hono: CORSミドルウェア
-        Hono->>Hono: バリデーションミドルウェア（Zod）
-
-        alt 🔴 サーバー側バリデーションエラー
-            Hono-->>Axios: 400 Bad Request
-            Axios-->>TQ: Error
-            TQ-->>Form: onError
-            Form-->>User: エラーメッセージ表示
-        else 🟡 バリデーション成功
-            Hono->>Controller: cardController.create(req)
-            Controller->>Service: cardService.create(data)
-
-            Service->>Service: ビジネスロジック<br/>（重複チェック等）
-
-            alt 🔴 ビジネスエラー（重複）
-                Service-->>Controller: Conflict Error
-                Controller-->>Hono: 409 Conflict
-                Hono-->>Axios: 409 Conflict
-                Axios-->>TQ: Error
-                TQ-->>Form: onError
-                Form-->>User: 「同名カードが存在します」
-            else 🟡 OK
-                Service->>Repo: repository.create(data)
-
-                alt 本番環境
-                    Repo->>PrismaRepo: PrismaCardRepository.create()
-                    PrismaRepo->>DB: INSERT INTO cards
-                    DB-->>PrismaRepo: 新規カードレコード
-                    PrismaRepo-->>Repo: Card オブジェクト
-                else テスト環境
-                    Repo->>MemoryRepo: InMemoryCardRepository.create()
-                    MemoryRepo->>MemoryRepo: cards.push(newCard)
-                    MemoryRepo-->>Repo: Card オブジェクト
-                end
-
-                Repo-->>Service: Card オブジェクト
-                Service-->>Controller: Card オブジェクト
-                Controller-->>Hono: 201 Created<br/>{ data: Card, message: "..." }
-                Hono-->>Axios: HTTP Response
-                Axios-->>TQ: Success
-                TQ->>TQ: キャッシュ無効化<br/>queryClient.invalidateQueries('cards')
-                TQ-->>Form: onSuccess
-                Form-->>User: トースト通知<br/>「カードを作成しました」
-                Form->>Form: リダイレクト<br/>/cards
-            end
+    U->>C: フォーム入力
+    C->>F: フォーム送信
+    F->>Z: バリデーション
+    alt バリデーション成功
+        Z-->>F: 成功
+        F->>Q: useMutation('createCard')
+        Q->>A: POST /api/cards
+        A->>H: HTTP Request + JSON Body
+        H->>Ctrl: ルーティング
+        Ctrl->>Z: リクエストバリデーション
+        alt バリデーション成功
+            Z-->>Ctrl: 成功
+            Ctrl->>Svc: createCard(data)
+            Svc->>Svc: 重複チェック
+            Svc->>Repo: create(data)
+            Repo->>P: prisma.card.create()
+            P->>DB: INSERT INTO cards
+            DB-->>P: 作成されたデータ
+            P-->>Repo: Card
+            Repo-->>Svc: Card
+            Svc-->>Ctrl: Card
+            Ctrl-->>H: JSON Response (201 Created)
+            H-->>A: HTTP 201 Created
+            A-->>Q: データ返却
+            Q->>Q: キャッシュ無効化
+            Q->>Q: 一覧再取得
+            Q-->>C: 成功通知
+            C->>U: トースト通知 + 画面遷移
+        else バリデーション失敗
+            Z-->>Ctrl: エラー
+            Ctrl-->>H: JSON Response (400 Bad Request)
+            H-->>A: HTTP 400
+            A-->>Q: エラー返却
+            Q-->>C: エラー通知
+            C->>U: エラーメッセージ表示
         end
+    else バリデーション失敗
+        Z-->>F: エラー
+        F-->>C: エラー表示
+        C->>U: フォームエラー表示
+    end
+```
+
+### カード削除フロー
+
+```mermaid
+sequenceDiagram
+    participant U as ユーザー
+    participant C as React Component
+    participant D as 確認ダイアログ
+    participant Q as TanStack Query
+    participant A as Axios
+    participant H as Hono.js
+    participant Ctrl as Controller
+    participant Svc as Service
+    participant Repo as Repository
+    participant P as Prisma
+    participant DB as PostgreSQL
+
+    U->>C: 削除ボタンクリック
+    C->>D: 確認ダイアログ表示
+    U->>D: OK
+    D->>C: 削除確定
+    C->>Q: useMutation('deleteCard')
+    Q->>A: DELETE /api/cards/:id
+    A->>H: HTTP Request
+    H->>Ctrl: ルーティング
+    Ctrl->>Svc: deleteCard(id)
+    Svc->>Svc: 依存関係チェック
+    alt 依存関係なし
+        Svc->>Repo: softDelete(id)
+        Repo->>P: prisma.card.update({ deletedAt: now })
+        P->>DB: UPDATE cards SET deleted_at = NOW()
+        DB-->>P: 更新完了
+        P-->>Repo: 成功
+        Repo-->>Svc: 成功
+        Svc-->>Ctrl: 成功
+        Ctrl-->>H: JSON Response (204 No Content)
+        H-->>A: HTTP 204 No Content
+        A-->>Q: 成功
+        Q->>Q: キャッシュ無効化
+        Q->>Q: 一覧再取得
+        Q-->>C: 成功通知
+        C->>U: トースト通知 + 一覧更新
+    else 依存関係あり
+        Svc-->>Ctrl: エラー (RES_DEPENDENCY_EXISTS)
+        Ctrl-->>H: JSON Response (409 Conflict)
+        H-->>A: HTTP 409 Conflict
+        A-->>Q: エラー返却
+        Q-->>C: エラー通知
+        C->>U: エラーメッセージ表示
     end
 ```
 
 ---
 
-## 🔵 顧客依頼の報酬設定フロー
+## 状態管理フロー
 
-### N:Mリレーション（Customer ←→ Card）の処理
+### サーバー状態（TanStack Query）
+
+```mermaid
+flowchart LR
+    A[API Response] -->|キャッシュ| B[TanStack Query Cache]
+    B -->|staleTime: 5分| C[Fresh Data]
+    B -->|cacheTime: 10分| D[Stale Data]
+    C -->|即座に返却| E[React Component]
+    D -->|バックグラウンド再取得| F[Refetch]
+    F -->|更新| B
+    B -->|無効化| G[Invalidation]
+    G -->|再取得| F
+```
+
+### クライアント状態（React Hooks）
 
 ```mermaid
 flowchart TD
-    A[🔵 ユーザーが顧客作成<br/>フォームで報酬カード選択] --> B[🟡 Card一覧から<br/>複数選択UI]
-    B --> C[🔵 選択したカードIDの配列<br/>rewardCardIds: string[]]
-    C --> D[🔵 POST /api/customers<br/>{ name, difficulty,<br/>rewardCardIds: [...] }]
-    D --> E[🔵 customerController.create]
-    E --> F[🔵 customerService.create]
-    F --> G[🔵 Prisma:<br/>customer.create]
-    G --> H[🔵 Prisma connect:<br/>rewardCards: {<br/>  connect: rewardCardIds.map<br/>    id => ({ id })<br/>}]
-    H --> I[(🔵 PostgreSQL<br/>トランザクション開始)]
-    I --> J[🔵 INSERT INTO customers]
-    J --> K[🔵 INSERT INTO<br/>_CustomerRewardCards<br/>中間テーブル]
-    K --> L[(🔵 COMMIT)]
-    L --> M[🔵 顧客データ返却<br/>include: { rewardCards: true }]
-    M --> N[🔵 TanStack Query<br/>キャッシュ保存]
-    N --> O[🔴 トースト通知<br/>顧客作成成功]
+    A[React Component] -->|useState| B[フォーム入力値]
+    A -->|useState| C[検索文字列]
+    A -->|useState| D[フィルタ条件]
+    A -->|useState| E[ページ番号]
+    B -->|送信時| F[TanStack Query Mutation]
+    C -->|変更時| G[TanStack Query Refetch]
+    D -->|変更時| G
+    E -->|変更時| G
 ```
 
 ---
 
-## 🔵 データエクスポート/インポートフロー
+## エラーハンドリングフロー
+
+```mermaid
+flowchart TD
+    A[API呼び出し] -->|成功| B[正常レスポンス]
+    A -->|エラー| C{エラータイプ}
+    C -->|400 Bad Request| D[バリデーションエラー]
+    C -->|404 Not Found| E[リソース未検出]
+    C -->|409 Conflict| F[重複エラー]
+    C -->|500 Internal Server Error| G[サーバーエラー]
+    C -->|ネットワークエラー| H[ネットワークエラー]
+    D -->|エラーメッセージ表示| I[React Component]
+    E -->|エラーメッセージ表示| I
+    F -->|エラーメッセージ表示| I
+    G -->|エラーログ記録| J[サーバーログ]
+    G -->|エラーメッセージ表示| I
+    H -->|リトライ| K[TanStack Query Retry]
+    K -->|再試行| A
+    K -->|最大リトライ回数| L[エラーメッセージ表示]
+    L --> I
+```
+
+---
+
+## データエクスポート/インポートフロー
 
 ### エクスポートフロー
 
 ```mermaid
 sequenceDiagram
-    participant User as 🔵 ユーザー
-    participant UI as 🟡 Export Component
-    participant API as 🔵 Hono.js API
-    participant Service as 🔵 ExportService
-    participant DB as 🔵 PostgreSQL
+    participant U as ユーザー
+    participant C as React Component
+    participant A as Axios
+    participant H as Hono.js
+    participant Ctrl as Controller
+    participant Svc as Service
+    participant Repo as Repository
+    participant DB as PostgreSQL
 
-    User->>UI: エクスポートボタンクリック
-    UI->>UI: リソース選択UI表示<br/>(cards, customers, ...)
-    User->>UI: エクスポート対象を選択
-    UI->>API: GET /api/export?resources=cards,customers
-    API->>Service: exportService.exportData(resources)
-    Service->>DB: Prismaで複数テーブル取得<br/>(findMany)
-    DB-->>Service: 全データ（リレーション含む）
-    Service->>Service: JSON形式に変換<br/>+ メタデータ追加<br/>(exportedAt, version)
-    Service-->>API: JSON データ
-    API-->>UI: Content-Type: application/json<br/>Content-Disposition: attachment
-    UI->>User: ファイルダウンロード<br/>atelier_export_20251109.json
+    U->>C: エクスポートボタンクリック
+    C->>A: GET /api/export?resources=cards,customers
+    A->>H: HTTP Request
+    H->>Ctrl: ルーティング
+    Ctrl->>Svc: exportData(resources)
+    Svc->>Repo: findAll(resources)
+    Repo->>DB: SELECT * FROM ...
+    DB-->>Repo: データ返却
+    Repo-->>Svc: データ配列
+    Svc->>Svc: JSON形式に変換
+    Svc->>Svc: バリデーション
+    Svc-->>Ctrl: JSON文字列
+    Ctrl-->>H: Response (application/json)
+    H-->>A: HTTP 200 OK + JSON
+    A-->>C: JSONデータ
+    C->>C: ファイルダウンロード
+    C->>U: ダウンロード完了
 ```
 
 ### インポートフロー
 
 ```mermaid
-flowchart TD
-    A[🔵 ユーザーが<br/>JSONファイル選択] --> B[🟡 ファイルアップロード<br/>フォーム]
-    B --> C[🔵 POST /api/import<br/>multipart/form-data]
-    C --> D[🔵 importController.import]
-    D --> E[🔵 importService.validateJSON]
-    E --> F{🔴 スキーマ<br/>バリデーション?}
-    F -->|Error| G[🔴 400 Bad Request<br/>詳細なエラーメッセージ]
-    G --> H[🔴 エラーモーダル表示<br/>「行10: energyCostが不正」]
-    F -->|OK| I[🔵 トランザクション開始]
-    I --> J[🔵 既存データ削除<br/>または上書き確認]
-    J --> K[🔵 Prisma createMany<br/>バルクインサート]
-    K --> L{🔴 DB制約<br/>エラー?}
-    L -->|Error| M[🔴 ROLLBACK]
-    M --> N[🔴 409 Conflict<br/>「ユニーク制約違反」]
-    N --> H
-    L -->|OK| O[🔵 COMMIT]
-    O --> P[🔵 インポート統計<br/>cards: 50, customers: 10]
-    P --> Q[🔵 200 OK<br/>{ imported: {...} }]
-    Q --> R[🔴 トースト通知<br/>「データをインポートしました」]
-    R --> S[🟡 全リストを<br/>再取得・表示]
+sequenceDiagram
+    participant U as ユーザー
+    participant C as React Component
+    participant F as File Input
+    participant A as Axios
+    participant H as Hono.js
+    participant Ctrl as Controller
+    participant Svc as Service
+    participant Z as Zod
+    participant Repo as Repository
+    participant DB as PostgreSQL
+
+    U->>C: ファイル選択
+    C->>F: ファイル読み込み
+    F->>C: JSON文字列
+    C->>A: POST /api/import (multipart/form-data)
+    A->>H: HTTP Request + File
+    H->>Ctrl: ルーティング
+    Ctrl->>Svc: importData(jsonString)
+    Svc->>Z: スキーマバリデーション
+    alt バリデーション成功
+        Z-->>Svc: 成功
+        Svc->>Svc: データ整合性チェック
+        alt 整合性OK
+            Svc->>Repo: bulkCreate(data)
+            Repo->>DB: INSERT INTO ... (トランザクション)
+            DB-->>Repo: 作成完了
+            Repo-->>Svc: 成功
+            Svc-->>Ctrl: インポート結果
+            Ctrl-->>H: JSON Response (200 OK)
+            H-->>A: HTTP 200 OK
+            A-->>C: 成功通知
+            C->>U: トースト通知
+        else 整合性NG
+            Svc-->>Ctrl: エラー (RES_INTEGRITY_ERROR)
+            Ctrl-->>H: JSON Response (400 Bad Request)
+            H-->>A: HTTP 400
+            A-->>C: エラー通知
+            C->>U: エラーメッセージ表示
+        end
+    else バリデーション失敗
+        Z-->>Svc: エラー詳細
+        Svc-->>Ctrl: エラー (VALID_SCHEMA_ERROR)
+        Ctrl-->>H: JSON Response (400 Bad Request)
+        H-->>A: HTTP 400
+        A-->>C: エラー通知
+        C->>U: エラーメッセージ表示
+    end
 ```
 
 ---
 
-## 🔵 TanStack Query キャッシング戦略
-
-### キャッシュライフサイクル
-
-```mermaid
-stateDiagram-v2
-    [*] --> Fresh: データ取得成功
-    Fresh --> Stale: staleTime経過<br/>(5分)
-    Stale --> Fetching: ユーザーが画面表示
-    Fetching --> Fresh: 新データ取得成功
-    Fetching --> Error: エラー発生
-    Error --> Stale: 古いデータを保持
-    Stale --> GarbageCollected: cacheTime経過<br/>(10分)
-    GarbageCollected --> [*]
-
-    note right of Fresh
-        🔵 キャッシュが新鮮
-        バックグラウンド取得なし
-    end note
-
-    note right of Stale
-        🟡 キャッシュが古い
-        表示時に再取得
-    end note
-```
-
-### キャッシュ設定
-
-```typescript
-// 🔵 TanStack Query 設定例
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000,      // 🔵 5分間は新鮮
-      cacheTime: 10 * 60 * 1000,     // 🔵 10分間キャッシュ保持
-      refetchOnWindowFocus: false,   // 🟡 ウィンドウフォーカス時は再取得しない
-      retry: 1,                      // 🟡 エラー時1回リトライ
-    },
-  },
-});
-```
-
----
-
-## 🟡 エラー伝播フロー
-
-### エラーハンドリングの流れ
+## 検索・フィルタリングフロー
 
 ```mermaid
 flowchart TD
-    A[(🔵 PostgreSQL<br/>エラー発生)] --> B[🔵 Prisma<br/>PrismaClientKnownRequestError]
-    B --> C[🔵 Service層で<br/>エラーキャッチ]
-    C --> D{🟡 エラー種別判定}
-    D -->|P2002<br/>Unique制約| E[🔴 ConflictError<br/>409]
-    D -->|P2025<br/>Not Found| F[🔴 NotFoundError<br/>404]
-    D -->|その他| G[🔴 InternalServerError<br/>500]
-
-    E --> H[🔵 Controller で<br/>エラーハンドリング]
-    F --> H
-    G --> H
-
-    H --> I[🔵 Hono.js<br/>エラーレスポンス]
-    I --> J[🔵 構造化エラー<br/>{ error: { code, message, details } }]
-    J --> K[🔵 Axios<br/>エラーレスポンス受信]
-    K --> L[🔵 TanStack Query<br/>onError コールバック]
-    L --> M{🟡 エラー種別}
-    M -->|400, 409| N[🔴 フォーム内エラー表示]
-    M -->|404| O[🔴 「データが見つかりません」<br/>トースト]
-    M -->|500| P[🔴 エラーモーダル<br/>「サーバーエラーが発生しました」]
-    M -->|Network Error| Q[🔴 「ネットワークエラー」<br/>トースト]
+    A[ユーザー入力] -->|検索文字列| B[React Component]
+    B -->|useState| C[検索状態]
+    C -->|デバウンス 500ms| D[TanStack Query]
+    D -->|useQuery| E[API呼び出し]
+    E -->|GET /api/cards?search=...| F[Hono.js]
+    F -->|Controller| G[Service]
+    G -->|Repository| H[Prisma]
+    H -->|WHERE name LIKE '%...%'| I[PostgreSQL]
+    I -->|結果| H
+    H -->|データ| G
+    G -->|データ| F
+    F -->|JSON| E
+    E -->|キャッシュ更新| D
+    D -->|UI更新| B
+    B -->|表示| A
 ```
 
 ---
 
-## 🗓️ 変更履歴
+## 変更履歴
 
 | 日付 | バージョン | 変更内容 |
 |------|----------|---------|
-| 2025-11-09 | 1.0 | 初版作成。React+Hono.js+TanStack Query+Prismaのデータフロー図 |
-| 2025-11-09 | 2.0 | 🔵 Repository層を追加。Prisma実装とIn-Memory実装を切り替え可能なデータフロー図に更新 |
+| 2025-01-XX | 1.0 | 初版作成 |
+
