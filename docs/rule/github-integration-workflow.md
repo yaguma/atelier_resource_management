@@ -2,18 +2,46 @@
 
 ## 概要
 
-タスクの実施フローに合わせて、GitHubのIssueとProjectを自動的に更新するフローを定義します。
+タスクの実施フローに合わせて、GitHubのIssueとProjectを自動的に更新するフローを定義します。`gh cli`を使用してGitHubとの連携を行います。
+
+GitHub連携処理は`github-sync` SubAgentとして実装されており、各コマンドから`@task general-purpose /github-sync`として呼び出されます。
 
 ## 前提条件
 
 - GitHubリポジトリが存在する
-- GitHub Projectが設定されている
-- GitHub Personal Access TokenまたはGitHub Appの認証情報が設定されている
+- GitHub Project（カンバン）が設定されている
+- `gh cli`がインストールされ、認証済みである（`gh auth status`で確認）
 - タスクには依存関係が定義されている
+
+## Issue番号の指定方法
+
+各コマンドでは、Issue番号を明示的に指定できます。Issue番号の取得は以下の優先順位で行われます：
+
+1. **ユーザが指定したIssue番号**（最優先）
+   - コマンド実行時に`--issue 123`のように指定
+   - または`issue_number`パラメータとして指定
+
+2. **タスクファイルから取得**
+   - タスクファイル内の`<!-- GitHub Issue: #123 -->`の形式から取得
+
+3. **タスクIDから検索**
+   - `gh issue list --search "TASK-0001"`でIssueを検索
+
+Issue番号が取得できない場合は、警告を表示し、GitHub連携をスキップします。
+
+## Projectステータス定義
+
+カンバンProjectのステータスは以下の5つを使用します：
+
+- **Backlog**: 依存するタスクが完了していない
+- **Ready**: 依存するタスクが完了している
+- **In Progress**: タスクが実施中
+- **In Review**: タスクがレビュー中
+- **Done**: タスクが完了した
 
 ## タスクフローとGitHub連携
 
-### 1. タスク作成
+### 1. タスク作成（kairo-tasks.md）
 
 **目的**: 新しいタスクを作成し、GitHubのIssueとProjectに登録する
 
@@ -31,29 +59,60 @@
   - ラベル: `task`, `{タスクタイプ}`, `{フェーズ名}`
   - マイルストーン: 該当するマイルストーンを設定
 - GitHub ProjectにIssueを追加
-  - ステータス: `Backlog` または `Todo`
-  - 依存関係をProjectで設定（依存タスクがある場合）
+  - 依存タスクの完了状況を確認
+  - 依存タスクが全て完了している場合: ステータスを`Ready`に設定
+  - 依存タスクが未完了の場合: ステータスを`Backlog`に設定
 
-**GitHub API操作**:
+**gh cli操作**:
 ```bash
 # Issue作成
-POST /repos/{owner}/{repo}/issues
-{
-  "title": "[TASK-0001] タスク名",
-  "body": "タスク詳細...",
-  "labels": ["task", "tdd", "phase1"],
-  "milestone": {milestone_number}
-}
+gh issue create \
+  --title "[TASK-0001] タスク名" \
+  --body "タスク詳細..." \
+  --label "task,tdd,phase1" \
+  --milestone "Phase 1"
 
-# Projectへの追加（Project V2 API使用）
-POST /projects/{project_id}/items
-{
-  "content_id": {issue_id},
-  "content_type": "Issue"
-}
+# Issue番号を取得（作成後の出力から取得）
+ISSUE_NUMBER=$(gh issue list --limit 1 --json number --jq '.[0].number')
+
+# ProjectにIssueを追加（Project V2の場合）
+# まずProject IDとステータスフィールドIDを取得
+PROJECT_ID=$(gh project list --owner OWNER --limit 1 --json id --jq '.[0].id')
+BACKLOG_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Backlog") | .id')
+READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Ready") | .id')
+
+# 依存タスクの完了状況を確認
+DEPENDENCIES_COMPLETE=true
+for dep_task in TASK-0000 TASK-0001; do
+  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number,state --jq '.[0]')
+  if [ "$(echo $DEP_ISSUE | jq -r '.state')" != "CLOSED" ]; then
+    DEPENDENCIES_COMPLETE=false
+    break
+  fi
+done
+
+# ステータスを決定してProjectに追加
+if [ "$DEPENDENCIES_COMPLETE" = "true" ]; then
+  STATUS_FIELD_ID=$READY_FIELD_ID
+else
+  STATUS_FIELD_ID=$BACKLOG_FIELD_ID
+fi
+
+gh project item-add $PROJECT_ID --owner OWNER --url "https://github.com/OWNER/REPO/issues/$ISSUE_NUMBER"
+gh api graphql -f query='
+  mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
+    updateProjectV2ItemFieldValue(
+      input: {
+        projectId: $project
+        itemId: $item
+        fieldId: $field
+        value: { singleSelectOptionId: $value }
+      }
+    ) { projectV2Item { id } }
+  }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$STATUS_FIELD_ID"
 ```
 
-### 2. タスクVerify
+### 2. タスクVerify（kairo-task-verify.md）
 
 **目的**: タスクの内容を検証し、実装準備が整っていることを確認する
 
@@ -65,38 +124,56 @@ POST /projects/{project_id}/items
 - GitHub Issueを更新
   - コメント追加: 検証結果を記録
   - ラベル追加: `verified`（検証完了時）
-  - ステータス更新: `Ready for Implementation`（検証完了時）
 - GitHub Projectを更新
-  - ステータス: `Todo` → `In Progress`（検証完了時）
-  - 検証完了日時をカスタムフィールドに記録
+  - 検証完了時: ステータスを`Ready`に更新（依存タスクが完了している場合）
+  - 依存タスクが未完了の場合: ステータスは`Backlog`のまま
 
-**GitHub API操作**:
+**gh cli操作**:
 ```bash
 # Issueコメント追加
-POST /repos/{owner}/{repo}/issues/{issue_number}/comments
-{
-  "body": "✅ タスク検証完了\n- 要件定義: 確認済み\n- 依存関係: 確認済み"
-}
+gh issue comment $ISSUE_NUMBER --body "✅ タスク検証完了
+- 要件定義: 確認済み
+- 依存関係: 確認済み
+- 実装方針: 妥当"
 
 # Issueラベル追加
-POST /repos/{owner}/{repo}/issues/{issue_number}/labels
-{
-  "labels": ["verified"]
-}
+gh issue edit $ISSUE_NUMBER --add-label "verified"
 
-# Projectステータス更新
-PATCH /projects/columns/{column_id}/cards/{card_id}
-{
-  "note": "検証完了: {date}"
-}
+# 依存タスクの完了状況を再確認
+DEPENDENCIES_COMPLETE=true
+for dep_task in TASK-0000 TASK-0001; do
+  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number,state --jq '.[0]')
+  if [ "$(echo $DEP_ISSUE | jq -r '.state')" != "CLOSED" ]; then
+    DEPENDENCIES_COMPLETE=false
+    break
+  fi
+done
+
+# Projectステータス更新（依存タスクが完了している場合のみReadyに更新）
+if [ "$DEPENDENCIES_COMPLETE" = "true" ]; then
+  READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Ready") | .id')
+  gh api graphql -f query='
+    mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
+      updateProjectV2ItemFieldValue(
+        input: {
+          projectId: $project
+          itemId: $item
+          fieldId: $field
+          value: { singleSelectOptionId: $value }
+        }
+      ) { projectV2Item { id } }
+    }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$READY_FIELD_ID"
+fi
 ```
 
-### 3. タスク実装
+### 3. タスク実装（kairo-implement.md, tdd-*.md, direct-setup.md）
 
 **目的**: タスクを実装し、進捗をGitHubに反映する
 
 **実行内容**:
 - 実装プロセスを実行（TDDまたはDIRECT）
+- 実装開始時にGitHub Projectを更新
+  - ステータスを`Ready`から`In Progress`に更新
 - 各実装ステップでGitHub Issueを更新
   - コメント追加: 各ステップの完了を記録
     - `tdd-requirements`完了
@@ -104,32 +181,32 @@ PATCH /projects/columns/{column_id}/cards/{card_id}
     - `tdd-red`完了
     - `tdd-green`完了
     - `tdd-refactor`完了
-    - `tdd-verify-complete`完了
-  - または
+    - または
     - `direct-setup`完了
-    - `direct-verify`完了
-- GitHub Projectを更新
-  - 進捗率を更新（カスタムフィールド）
-  - 実装ステップの完了状況を記録
 
-**GitHub API操作**:
+**gh cli操作**:
 ```bash
-# 実装ステップ完了時のコメント
-POST /repos/{owner}/{repo}/issues/{issue_number}/comments
-{
-  "body": "✅ {ステップ名}完了\n- 実行時間: {time}\n- 作成ファイル: {files}"
-}
+# 実装開始時: ProjectステータスをIn Progressに更新
+IN_PROGRESS_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="In Progress") | .id')
+gh api graphql -f query='
+  mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
+    updateProjectV2ItemFieldValue(
+      input: {
+        projectId: $project
+        itemId: $item
+        fieldId: $field
+        value: { singleSelectOptionId: $value }
+      }
+    ) { projectV2Item { id } }
+  }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$IN_PROGRESS_FIELD_ID"
 
-# Project進捗更新
-PATCH /projects/columns/{column_id}/cards/{card_id}
-{
-  "fields": {
-    "progress": "50%"
-  }
-}
+# 実装ステップ完了時のコメント
+gh issue comment $ISSUE_NUMBER --body "✅ tdd-requirements完了
+- 実行時間: 30分
+- 作成ファイル: requirements.md"
 ```
 
-### 4. タスク実装Verify
+### 4. タスク実装Verify（tdd-verify-complete.md, direct-verify.md）
 
 **目的**: 実装の完了を検証し、品質を確認する
 
@@ -147,32 +224,75 @@ PATCH /projects/columns/{column_id}/cards/{card_id}
   - Issueをクローズ: 実装完了時
 - GitHub Projectを更新
   - ステータス: `In Progress` → `Done`
-  - 完了日時を記録
   - 依存関係を確認し、依存タスクが全て完了している場合は次のタスクを自動的に`Ready`に更新
 
-**GitHub API操作**:
+**gh cli操作**:
 ```bash
 # 検証結果コメント
-POST /repos/{owner}/{repo}/issues/{issue_number}/comments
-{
-  "body": "✅ 実装検証完了\n- テスト: {passed}/{total}\n- カバレッジ: {coverage}%\n- 所要時間: {time}"
-}
+gh issue comment $ISSUE_NUMBER --body "✅ 実装検証完了
+- テスト: 25/25 (100%)
+- カバレッジ: 95%
+- 所要時間: 3時間45分"
+
+# Issueラベル追加
+gh issue edit $ISSUE_NUMBER --add-label "implementation-complete"
 
 # Issueクローズ
-PATCH /repos/{owner}/{repo}/issues/{issue_number}
-{
-  "state": "closed"
-}
+gh issue close $ISSUE_NUMBER
 
-# Projectステータス更新
-PATCH /projects/columns/{column_id}/cards/{card_id}
-{
-  "note": "完了: {date}"
-}
+# ProjectステータスをDoneに更新
+DONE_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Done") | .id')
+gh api graphql -f query='
+  mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
+    updateProjectV2ItemFieldValue(
+      input: {
+        projectId: $project
+        itemId: $item
+        fieldId: $field
+        value: { singleSelectOptionId: $value }
+      }
+    ) { projectV2Item { id } }
+  }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$DONE_FIELD_ID"
 
 # 依存タスクの確認と更新
-GET /repos/{owner}/{repo}/issues/{dependent_issue_number}
-# 依存タスクが全て完了している場合、次のタスクをReadyに更新
+# このタスクに依存している他のタスクを検索
+DEPENDENT_ISSUES=$(gh issue list --search "TASK-0002" --json number,title,state --jq '.[] | select(.state != "CLOSED")')
+
+# 各依存タスクについて、その依存タスクが全て完了しているか確認
+for dep_issue in $DEPENDENT_ISSUES; do
+  DEP_ISSUE_NUM=$(echo $dep_issue | jq -r '.number')
+  # 依存タスクの依存関係を確認（Issue本文から取得）
+  DEP_DEPS=$(gh issue view $DEP_ISSUE_NUM --json body --jq '.body' | grep -oP '依存: \K[^\\n]*')
+  
+  ALL_DEPS_COMPLETE=true
+  for dep_task_id in $DEP_DEPS; do
+    DEP_TASK_ISSUE=$(gh issue list --search "$dep_task_id" --json number,state --jq '.[0]')
+    if [ "$(echo $DEP_TASK_ISSUE | jq -r '.state')" != "CLOSED" ]; then
+      ALL_DEPS_COMPLETE=false
+      break
+    fi
+  done
+  
+  # 依存タスクが全て完了している場合、Readyに更新
+  if [ "$ALL_DEPS_COMPLETE" = "true" ]; then
+    READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Ready") | .id')
+    DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_ISSUE_NUM) | .id")
+    gh api graphql -f query='
+      mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
+        updateProjectV2ItemFieldValue(
+          input: {
+            projectId: $project
+            itemId: $item
+            fieldId: $field
+            value: { singleSelectOptionId: $value }
+          }
+        ) { projectV2Item { id } }
+      }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$READY_FIELD_ID"
+    
+    # コメントを追加
+    gh issue comment $DEP_ISSUE_NUM --body "✅ 依存タスクが完了しました。実装準備が整いました。"
+  fi
+done
 ```
 
 ## 依存関係の管理
@@ -202,59 +322,63 @@ GET /repos/{owner}/{repo}/issues/{dependent_issue_number}
    - 依存タスクが全て完了している場合、次のタスクのIssueにコメントを追加
    - 次のタスクを`Ready for Implementation`に更新
 
-## 実装例
+## SubAgentの使用
 
-### タスク作成時のGitHub連携
+GitHub連携処理は`github-sync` SubAgentとして実装されています。各コマンドから以下のように呼び出します：
 
-```typescript
-async function createTaskInGitHub(task: Task) {
-  // Issue作成
-  const issue = await github.issues.create({
-    owner: 'owner',
-    repo: 'repo',
-    title: `[${task.id}] ${task.name}`,
-    body: formatTaskBody(task),
-    labels: ['task', task.type, task.phase],
-    milestone: task.milestone
-  });
-
-  // Projectに追加
-  await github.projects.addItem({
-    projectId: projectId,
-    contentId: issue.data.id,
-    contentType: 'Issue'
-  });
-
-  // 依存関係の設定
-  if (task.dependencies.length > 0) {
-    await setDependencies(issue.data.number, task.dependencies);
-  }
-}
+```bash
+@task general-purpose /github-sync --action {action} --issue_number {issue_number} [その他のパラメータ]
 ```
 
-### タスク検証時のGitHub連携
+### 利用可能なアクション
 
-```typescript
-async function verifyTaskInGitHub(issueNumber: number, verificationResult: VerificationResult) {
-  // 検証結果をコメントとして追加
-  await github.issues.createComment({
-    owner: 'owner',
-    repo: 'repo',
-    issue_number: issueNumber,
-    body: formatVerificationComment(verificationResult)
-  });
+- `create_issue`: Issueを作成し、Projectに追加
+- `add_comment`: Issueにコメントを追加
+- `add_label`: Issueにラベルを追加
+- `update_status`: Projectのステータスを更新
+- `close_issue`: Issueをクローズし、ProjectステータスをDoneに更新
+- `check_dependencies`: 依存タスクの完了状況を確認し、次のタスクをReadyに更新
 
-  // 検証完了ラベルを追加
-  await github.issues.addLabels({
-    owner: 'owner',
-    repo: 'repo',
-    issue_number: issueNumber,
-    labels: ['verified']
-  });
+詳細は `.claude/commands/github-sync.md` を参照してください。
 
-  // Projectステータスを更新
-  await updateProjectStatus(issueNumber, 'In Progress');
-}
+## 実装例
+
+### タスク作成時のGitHub連携（SubAgent呼び出し例）
+
+```bash
+# Issue作成とProject追加
+@task general-purpose /github-sync \
+  --action create_issue \
+  --task_id TASK-0001 \
+  --task_name "タスク名" \
+  --task_body "タスク詳細..." \
+  --labels "task,tdd,phase1" \
+  --dependencies "TASK-0000"
+```
+
+### タスク検証時のGitHub連携（SubAgent呼び出し例）
+
+```bash
+# 検証結果をコメントとして追加
+@task general-purpose /github-sync \
+  --action add_comment \
+  --issue_number 123 \
+  --comment "✅ タスク検証完了
+- 要件定義: 確認済み
+- 依存関係: 確認済み
+- 実装方針: 妥当"
+
+# verifiedラベルを追加
+@task general-purpose /github-sync \
+  --action add_label \
+  --issue_number 123 \
+  --labels "verified"
+
+# ステータスをReadyに更新（依存タスクが完了している場合）
+@task general-purpose /github-sync \
+  --action update_status \
+  --issue_number 123 \
+  --status "Ready"
 ```
 
 ## エラーハンドリング
@@ -268,13 +392,23 @@ async function verifyTaskInGitHub(issueNumber: number, verificationResult: Verif
 
 ## 設定
 
-### 環境変数
+### gh cliの認証確認
 
 ```bash
-GITHUB_TOKEN=your_personal_access_token
-GITHUB_OWNER=repository_owner
-GITHUB_REPO=repository_name
-GITHUB_PROJECT_ID=project_id
+# 認証状態を確認
+gh auth status
+
+# 認証が必要な場合
+gh auth login
+```
+
+### 環境変数（オプション）
+
+```bash
+# gh cliは通常、認証情報を自動的に管理しますが、
+# 必要に応じて環境変数を設定できます
+export GH_TOKEN=your_personal_access_token
+export GH_REPO=owner/repo
 ```
 
 ### 設定ファイル（オプション）
@@ -282,9 +416,6 @@ GITHUB_PROJECT_ID=project_id
 `docs/rule/github-config.json`:
 ```json
 {
-  "owner": "repository_owner",
-  "repo": "repository_name",
-  "projectId": "project_id",
   "labels": {
     "task": "task",
     "tdd": "tdd",
@@ -293,8 +424,15 @@ GITHUB_PROJECT_ID=project_id
     "implementation-complete": "implementation-complete"
   },
   "milestones": {
-    "phase1": 1,
-    "phase2": 2
+    "phase1": "Phase 1",
+    "phase2": "Phase 2"
+  },
+  "projectStatus": {
+    "backlog": "Backlog",
+    "ready": "Ready",
+    "inProgress": "In Progress",
+    "inReview": "In Review",
+    "done": "Done"
   }
 }
 ```
@@ -303,45 +441,50 @@ GITHUB_PROJECT_ID=project_id
 
 ```mermaid
 flowchart TD
-    A[タスク作成] --> B[GitHub Issue作成]
-    B --> C[GitHub Projectに追加]
-    C --> D[依存関係設定]
+    A[kairo-tasks: タスク作成] --> B[GitHub Issue作成]
+    B --> C{依存タスク完了?}
+    C -->|Yes| D[Project: Ready]
+    C -->|No| E[Project: Backlog]
+    D --> F[kairo-task-verify: タスクVerify]
+    E --> F
     
-    D --> E[タスクVerify]
-    E --> F{検証OK?}
-    F -->|No| E
-    F -->|Yes| G[Issue更新: verified]
-    G --> H[Project更新: In Progress]
+    F --> G{検証OK?}
+    G -->|No| F
+    G -->|Yes| H[Issue: verifiedラベル追加]
+    H --> I{依存タスク完了?}
+    I -->|Yes| J[Project: Ready]
+    I -->|No| K[Project: Backlogのまま]
     
-    H --> I[タスク実装]
-    I --> J[実装ステップ実行]
-    J --> K[各ステップでIssueコメント追加]
-    K --> L[Project進捗更新]
-    L --> M{実装完了?}
-    M -->|No| J
-    M -->|Yes| N[タスク実装Verify]
+    J --> L[kairo-implement: タスク実装開始]
+    L --> M[Project: In Progress]
+    M --> N[実装ステップ実行]
+    N --> O[各ステップでIssueコメント追加]
+    O --> P{実装完了?}
+    P -->|No| N
+    P -->|Yes| Q[tdd-verify-complete/direct-verify: 実装Verify]
     
-    N --> O{検証OK?}
-    O -->|No| I
-    O -->|Yes| P[Issue更新: implementation-complete]
-    P --> Q[Issueクローズ]
-    Q --> R[Project更新: Done]
-    R --> S[依存タスク確認]
-    S --> T{次のタスク準備OK?}
-    T -->|Yes| U[次のタスクをReadyに更新]
-    T -->|No| V[完了]
-    U --> V
+    Q --> R{検証OK?}
+    R -->|No| L
+    R -->|Yes| S[Issue: implementation-completeラベル]
+    S --> T[Issueクローズ]
+    T --> U[Project: Done]
+    U --> V[依存タスク確認]
+    V --> W{次のタスク準備OK?}
+    W -->|Yes| X[次のタスクをReadyに更新]
+    W -->|No| Y[完了]
+    X --> Y
 ```
 
 ## 注意事項
 
-1. **GitHub APIレート制限**: 
-   - 認証済みリクエスト: 5,000リクエスト/時間
-   - レート制限に達した場合は、リトライロジックで対応
+1. **gh cliのインストール**:
+   - `gh`コマンドがインストールされていることを確認
+   - インストール方法: https://cli.github.com/
 
 2. **Project V2 API**:
    - GitHub Project V2はGraphQL APIを使用
-   - REST APIとGraphQL APIの使い分けに注意
+   - `gh api graphql`コマンドでGraphQLクエリを実行
+   - ProjectのステータスフィールドIDは動的に取得する必要がある
 
 3. **依存関係の循環参照**:
    - タスク作成時に循環参照をチェック
@@ -350,4 +493,13 @@ flowchart TD
 4. **IssueとProjectの同期**:
    - IssueのステータスとProjectのステータスを同期
    - 手動で変更された場合の整合性チェック
+
+5. **エラーハンドリング**:
+   - `gh`コマンドの実行結果を確認
+   - エラー時は適切なエラーメッセージを表示
+   - リトライロジックを実装（必要に応じて）
+
+6. **進捗率の計算**:
+   - 進捗率の計算は不要（ユーザー要求により）
+   - ステータスのみで管理
 

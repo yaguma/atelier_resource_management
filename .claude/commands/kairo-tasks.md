@@ -107,6 +107,19 @@ description: 設計文書に基づいて実装タスクを1日単位の粒度で
    - 各タスクにチェックボックスを追加してタスクの完了状況を追跡可能にする
    - 各タスクには 要件名 の定義を含める
 
+11. **GitHub Issue/Project連携**
+   - 各タスクについて、`@task general-purpose /github-sync`を呼び出してGitHub Issueを作成
+   - アクション: `create_issue`
+   - パラメータ:
+     - `task_id`: タスクID（TASK-0000形式）
+     - `task_name`: タスク名
+     - `task_body`: タスク詳細（要件リンク、依存タスク、推定工数、タスクタイプ、実装詳細を含む）
+     - `labels`: `task,{タスクタイプ},{フェーズ名}`
+     - `milestone`: 該当するマイルストーン（指定がある場合）
+     - `dependencies`: 依存タスクIDのリスト（カンマ区切り）
+   - 返されたIssue番号をタスクファイルに記録（`<!-- GitHub Issue: #123 -->`の形式）
+   - 詳細は `docs/rule/github-integration-workflow.md` を参照
+
 ## 出力ファイル構造
 
 作成するファイル:
