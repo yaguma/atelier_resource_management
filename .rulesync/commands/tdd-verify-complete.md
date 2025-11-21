@@ -31,23 +31,32 @@ TDD開発でテストケースの実装が完全に完了しているかを検�
 - **この工程では修正禁止**: テスト失敗を発見してもここでは修正しない
 - テスト状態を記録し、次のステップに進む
 
-### 2. 事前準備
+### 2. 事前準備とIssue番号の取得
 
 検証コンテキストの準備を行います：
 
-1. **追加ルールの読み込み**
+1. **Issue番号の取得**
+   - ユーザが指定したタスクID（task_id）を確認
+   - ユーザが指定したIssue番号（issue_number）を確認
+   - Issue番号の取得優先順位:
+     1. ユーザが指定したIssue番号（最優先）
+     2. タスクファイルから取得（`<!-- GitHub Issue: #123 -->`の形式）
+     3. タスクIDからIssueを検索（`gh issue list --search "TASK-0001"`）
+   - 取得したIssue番号を記録（後続のGitHub連携で使用）
+
+2. **追加ルールの読み込み**
    - `AGENTS.md` ファイルが存在する場合は読み込み
    - `docs/rule` ディレクトリが存在する場合は読み込み
    - `docs/rule/tdd` ディレクトリが存在する場合は読み込み  
    - `docs/rule/tdd/verify-complete` ディレクトリが存在する場合は読み込み
    - 各ディレクトリ内のすべてのファイルを読み込み、追加ルールとして適用
 
-2. **@agent-symbol-searcher で検証関連情報を検索し、見つかったファイルを読み込み**
+3. **@agent-symbol-searcher で検証関連情報を検索し、見つかったファイルを読み込み**
    - 完了予定のテストケースや機能を検索し、該当ファイルをReadツールで読み込み
    - 既存のテストカバレッジや品質基準を確認し、関連ファイルをReadツールで読み込み
    - 実装完了タスクのマーキングパターンを特定し、タスクファイルをReadツールで読み込み
 
-3. **関連ファイルを直接読み込み**
+4. **関連ファイルを直接読み込み**
    - `docs/implements/{要件名}/{{task_id}}/{feature_name}-memo.md` - 既存の開発履歴を確認
    - `docs/implements/{要件名}/{{task_id}}/{feature_name}-requirements.md` - 要件定義を確認
    - `docs/implements/{要件名}/{{task_id}}/{feature_name}-testcases.md` - テストケース定義を確認
@@ -235,6 +244,12 @@ TDD開発でテストケースの実装が完全に完了しているかを検�
 
 **メモファイル記録**: 検証結果をメモファイルに自動追記する。
 **元タスクファイル更新**: 完了したタスクに✅完了マークを自動追加する。
+**GitHub Issue/Project連携**:
+- 取得したIssue番号を使用（ステップ2で取得したIssue番号）
+- Issue番号が取得できない場合は警告を表示し、GitHub連携をスキップ
+- IssueクローズとProject更新: `@task general-purpose /github-sync --action close_issue --issue_number {issue_number} --comment "✅ 実装検証完了\n- テスト: {passed}/{total}\n- カバレッジ: {coverage}%\n- 所要時間: {time}"`
+- 依存タスクの確認と更新: `@task general-purpose /github-sync --action check_dependencies --issue_number {issue_number}`
+- 詳細は `docs/rule/github-integration-workflow.md` を参照
 
 #### 実装不足がある場合
 

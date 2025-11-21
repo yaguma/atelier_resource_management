@@ -14,6 +14,14 @@
 - 実装用のワークスペースが設定されている
 - task_id は　`TASK-{4桁の数字}` (例 TASK-0001 ) である
 
+## 入力パラメータ
+
+- **task_id** (オプション): 実装するタスクID（例: `TASK-0001`）
+- **issue_number** (オプション): GitHub Issue番号（例: `123`）
+  - Issue番号が指定された場合、そのIssueを使用
+  - Issue番号が指定されていない場合、タスクファイルから取得を試みる
+  - どちらも取得できない場合はエラーを表示
+
 ## 実行内容
 
 **【信頼性レベル指示】**:
@@ -34,11 +42,17 @@
    - 存在しない場合は `CLAUDE.md` から技術スタックセクションを読み込み  
    - どちらも存在しない場合は `.claude/commands/tech-stack.md` のデフォルト定義を使用
 
-3. **タスクの選択**
+3. **タスクの選択とIssue番号の取得**
+   - ユーザが指定したタスクID（task_id）を確認
+   - ユーザが指定したIssue番号（issue_number）を確認
+   - Issue番号の取得優先順位:
+     1. ユーザが指定したIssue番号（最優先）
+     2. タスクファイルから取得（`<!-- GitHub Issue: #123 -->`の形式）
+     3. タスクIDからIssueを検索（`gh issue list --search "TASK-0001"`）
    - @agent-symbol-searcher で指定されたタスクID(TASK-0000形式)を検索し、見つかったタスクファイルをReadツールで読み込み
-   - ユーザが指定したタスクIDを確認
    - 指定がない場合は、依存関係に基づいて次のタスクを自動選択
    - 選択したタスクの詳細を表示
+   - 取得したIssue番号を記録（後続のGitHub連携で使用）
    - 読み込んだ技術スタック定義に基づいて実装方針を決定
 
 4. **依存関係の確認**
@@ -65,6 +79,7 @@
    コマンド: /tsumiki:tdd-requirements
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issueにコメント追加（`✅ tdd-requirements完了`）
 
    b. **テストケース作成** - `@task general-purpose /tsumiki:tdd-testcases`
    ```
@@ -73,6 +88,7 @@
    コマンド: /tsumiki:tdd-testcases
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issueにコメント追加（`✅ tdd-testcases完了`）
 
    c. **テスト実装** - `@task general-purpose /tsumiki:tdd-red`
    ```
@@ -81,6 +97,7 @@
    コマンド: /tsumiki:tdd-red
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issueにコメント追加（`✅ tdd-red完了`）
 
    d. **最小実装** - `@task general-purpose /tsumiki:tdd-green`
    ```
@@ -89,6 +106,7 @@
    コマンド: /tsumiki:tdd-green
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issueにコメント追加（`✅ tdd-green完了`）
 
    e. **リファクタリング** - `@task general-purpose /tsumiki:tdd-refactor`
    ```
@@ -97,6 +115,7 @@
    コマンド: /tsumiki:tdd-refactor
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issueにコメント追加（`✅ tdd-refactor完了`）
 
    f. **品質確認** - `@task general-purpose /tsumiki:tdd-verify-complete`
    ```
@@ -105,6 +124,7 @@
    コマンド: /tsumiki:tdd-verify-complete
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issue/Project更新は`tdd-verify-complete`コマンド内で実行
 
    ### B. **直接作業プロセス**（準備作業タスク用）
 
@@ -119,6 +139,7 @@
    - 環境設定
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issueにコメント追加（`✅ direct-setup完了`）
 
    b. **作業結果の確認** - `@task general-purpose /tsumiki:direct-verify`
    ```
@@ -130,8 +151,20 @@
    - 次のタスクへの準備状況確認
    実行方式: 個別Task実行
    ```
+   - 完了後: GitHub Issue/Project更新は`direct-verify`コマンド内で実行
 
-8. **タスクの完了処理**
+8. **GitHub Issue/Project連携**
+   - 実装開始時:
+     - 取得したIssue番号を使用（ステップ3で取得したIssue番号）
+     - Issue番号が取得できない場合は警告を表示し、GitHub連携をスキップ
+     - GitHub Projectのステータスを`Ready`から`In Progress`に更新: `@task general-purpose /github-sync --action update_status --issue_number {issue_number} --status "In Progress"`
+   - 各実装ステップ完了時:
+     - 取得したIssue番号を使用してGitHub Issueにコメントを追加: `@task general-purpose /github-sync --action add_comment --issue_number {issue_number} --comment "✅ {ステップ名}完了\n- 実行時間: {time}\n- 作成ファイル: {files}"`
+     - TDDプロセスの場合: `tdd-requirements`, `tdd-testcases`, `tdd-red`, `tdd-green`, `tdd-refactor`の各ステップ完了時にコメント追加
+     - DIRECTプロセスの場合: `direct-setup`完了時にコメント追加
+   - 詳細は `docs/rule/github-integration-workflow.md` を参照
+
+9. **タスクの完了処理**
    - タスクのステータスを更新（タスクファイルのチェックボックスにチェックを入れる）
    - 実装結果をドキュメント化
    - 次のタスクを提案
@@ -172,8 +205,14 @@ flowchart TD
 # 全タスクを順番に実装
 $ claude code kairo-implement --all
 
-# 特定のタスクを実装
-$ claude code kairo-implement --task {{task_id}}
+# 特定のタスクを実装（タスクID指定）
+$ claude code kairo-implement --task TASK-0001
+
+# 特定のタスクを実装（Issue番号指定）
+$ claude code kairo-implement --issue 123
+
+# 特定のタスクを実装（タスクIDとIssue番号の両方指定）
+$ claude code kairo-implement --task TASK-0001 --issue 123
 
 # 並行実行可能なタスクを一覧表示
 $ claude code kairo-implement --list-parallel

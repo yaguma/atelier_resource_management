@@ -10,22 +10,39 @@ DIRECTタスクで実行した設定作業の動作確認とテストを行い�
 - タスクIDが提供されている
 - 設定作業の記録が存在する
 
+## 入力パラメータ
+
+- **task_id** (オプション): 検証するタスクID（例: `TASK-0001`）
+- **issue_number** (オプション): GitHub Issue番号（例: `123`）
+  - Issue番号が指定された場合、そのIssueを使用
+  - Issue番号が指定されていない場合、タスクファイルから取得を試みる
+  - どちらも取得できない場合はエラーを表示
+
 ## 実行内容
 
 **【重要】**: direct-setupで作成されたファイルについて、コンパイルエラーや構文エラーが見つかった場合は自動的に解決を試行します。
 
-1. **追加ルールの読み込み**
+1. **Issue番号の取得**
+   - ユーザが指定したタスクID（task_id）を確認
+   - ユーザが指定したIssue番号（issue_number）を確認
+   - Issue番号の取得優先順位:
+     1. ユーザが指定したIssue番号（最優先）
+     2. タスクファイルから取得（`<!-- GitHub Issue: #123 -->`の形式）
+     3. タスクIDからIssueを検索（`gh issue list --search "TASK-0001"`）
+   - 取得したIssue番号を記録（後続のGitHub連携で使用）
+
+2. **追加ルールの読み込み**
    - `docs/rule` ディレクトリが存在する場合は読み込み
    - `docs/rule/direct` ディレクトリが存在する場合は読み込み  
    - `docs/rule/direct/verify` ディレクトリが存在する場合は読み込み
    - 各ディレクトリ内のすべてのファイルを読み込み、追加ルールとして適用
 
-2. **技術スタック定義の読み込み**
+3. **技術スタック定義の読み込み**
    - `docs/tech-stack.md` が存在する場合は読み込み
    - 存在しない場合は `CLAUDE.md` から技術スタックセクションを読み込み  
    - どちらも存在しない場合は `.claude/commands/tech-stack.md` のデフォルト定義を使用
 
-3. **設定の確認**
+4. **設定の確認**
    - 読み込んだ技術スタック定義に基づいて検証項目を特定
    - @agent-symbol-searcher で関連設定や検証パターンを検索し、見つかったファイルをReadツールで読み込み
    - `docs/implements/{要件名}/{TASK-ID}/setup-report.md` をReadツールで読み込み、設定作業の結果を確認
@@ -34,20 +51,20 @@ DIRECTタスクで実行した設定作業の動作確認とテストを行い�
    - 依存関係のインストール状況確認
    - サービスの起動状況確認
 
-3. **コンパイル・構文確認**
+5. **コンパイル・構文確認**
    - TypeScript/JavaScript構文エラーチェック（該当する場合）
    - 設定ファイルの構文確認（JSON, YAML等）
    - SQL構文確認（該当する場合）
    - 最低限のコンパイルエラー解消
 
-4. **動作テストの実行**
+6. **動作テストの実行**
    - @agent-symbol-searcher で既存のテストケースや検証スクリプトを検索し、見つかったファイルをReadツールで読み込み
    - 基本的な動作確認
    - 接続テスト
    - 権限の確認
    - エラーケースの確認
 
-5. **品質チェック**
+7. **品質チェック**
    - セキュリティ設定の確認
    - パフォーマンス基準の確認
    - ログの確認
@@ -308,6 +325,13 @@ jq '.port = 3000' config.json > temp.json && mv temp.json config.json
 
 ## タスクの完了マーキング
 品質チェックが十分で、全ての確認項目がクリアされた場合は、**自動的に**tasksディレクトリの該当するタスクファイルに完了マークを付けてください。
+
+## GitHub Issue/Project連携
+- 取得したIssue番号を使用（ステップ1で取得したIssue番号）
+- Issue番号が取得できない場合は警告を表示し、GitHub連携をスキップ
+- IssueクローズとProject更新: `@task general-purpose /github-sync --action close_issue --issue_number {issue_number} --comment "✅ 実装検証完了\n- 設定確認: 完了\n- 動作テスト: 完了\n- 品質チェック: 完了"`
+- 依存タスクの確認と更新: `@task general-purpose /github-sync --action check_dependencies --issue_number {issue_number}`
+- 詳細は `docs/rule/github-integration-workflow.md` を参照
 
 ### 完了条件
 以下の条件を全て満たす場合にタスクを完了とマークします：
