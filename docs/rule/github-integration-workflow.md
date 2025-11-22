@@ -31,13 +31,14 @@ Issue番号が取得できない場合は、警告を表示し、GitHub連携を
 
 ## Projectステータス定義
 
-カンバンProjectのステータスは以下の5つを使用します：
+カンバンProjectのステータスは以下の4つを使用します：
 
-- **Backlog**: 依存するタスクが完了していない
-- **Ready**: 依存するタスクが完了している
+- **Ready**: タスクが実装準備完了
 - **In Progress**: タスクが実施中
 - **In Review**: タスクがレビュー中
 - **Done**: タスクが完了した
+
+**注意**: 依存関係はGitHub IssueのRelationships機能で管理されるため、Backlogステータスは使用しません。
 
 ## タスクフローとGitHub連携
 
@@ -58,10 +59,10 @@ Issue番号が取得できない場合は、警告を表示し、GitHub連携を
     - 実装詳細
   - ラベル: `task`, `{タスクタイプ}`, `{フェーズ名}`
   - マイルストーン: 該当するマイルストーンを設定
+- GitHub IssueのRelationshipsを設定
+  - 依存タスクとの依存関係を設定（`depends on`）
 - GitHub ProjectにIssueを追加
-  - 依存タスクの完了状況を確認
-  - 依存タスクが全て完了している場合: ステータスを`Ready`に設定
-  - 依存タスクが未完了の場合: ステータスを`Backlog`に設定
+  - ステータスを`Ready`に設定（依存関係はRelationshipsで管理されるため、常にReady）
 
 **gh cli操作**:
 ```bash
@@ -75,60 +76,39 @@ gh issue create \
 # Issue番号を取得（作成後の出力から取得）
 ISSUE_NUMBER=$(gh issue list --limit 1 --json number --jq '.[0].number')
 
-# ProjectにIssueを追加（Project V2の場合）
-# まずProject IDとステータスフィールドIDを取得
-PROJECT_ID=$(gh project list --owner OWNER --limit 1 --json id --jq '.[0].id')
-BACKLOG_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Backlog") | .id')
-READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Ready") | .id')
+# Issue IDを取得
+ISSUE_ID=$(gh issue view $ISSUE_NUMBER --json id --jq '.id')
 
-# 依存タスクの完了状況を確認
-DEPENDENCIES_COMPLETE=true
+# IssueのRelationshipsを設定（依存タスクとの依存関係）
 for dep_task in TASK-0000 TASK-0001; do
-  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number --jq '.[0]')
-  if [ -z "$DEP_ISSUE" ] || [ "$DEP_ISSUE" = "null" ]; then
-    DEPENDENCIES_COMPLETE=false
-    break
-  fi
-  DEP_ISSUE_NUM=$(echo $DEP_ISSUE | jq -r '.number')
-  
-  # 依存タスクのProjectステータスを確認（In ReviewまたはDoneであれば完了とみなす）
-  DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_ISSUE_NUM) | .id")
-  if [ -z "$DEP_ITEM_ID" ] || [ "$DEP_ITEM_ID" = "null" ]; then
-    DEPENDENCIES_COMPLETE=false
-    break
-  fi
-  
-  # ProjectステータスをGraphQL APIで取得
-  DEP_STATUS=$(gh api graphql -f query='
-    query($project:ID!, $item:ID!) {
-      node(id: $project) {
-        ... on ProjectV2 {
-          item(id: $item) {
-            fieldValueByName(name: "Status") {
-              ... on ProjectV2ItemFieldSingleSelectValue {
-                name
-              }
-            }
+  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number,id --jq '.[0]')
+  if [ -n "$DEP_ISSUE" ] && [ "$DEP_ISSUE" != "null" ]; then
+    DEP_ISSUE_NUM=$(echo $DEP_ISSUE | jq -r '.number')
+    DEP_ISSUE_ID=$(echo $DEP_ISSUE | jq -r '.id')
+    # IssueのRelationshipsを設定（depends on）
+    gh api graphql -f query='
+      mutation($issue:ID!, $dependsOn:ID!) {
+        updateIssue(input: {
+          id: $issue
+          dependsOn: [$dependsOn]
+        }) {
+          issue {
+            id
           }
         }
-      }
-    }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" --jq '.data.node.item.fieldValueByName.name' 2>/dev/null || echo "")
-  
-  # In ReviewまたはDoneステータスの場合のみ完了とみなす
-  if [ "$DEP_STATUS" != "In Review" ] && [ "$DEP_STATUS" != "Done" ]; then
-    DEPENDENCIES_COMPLETE=false
-    break
+      }' -f issue="$ISSUE_ID" -f dependsOn="$DEP_ISSUE_ID"
   fi
 done
 
-# ステータスを決定してProjectに追加
-if [ "$DEPENDENCIES_COMPLETE" = "true" ]; then
-  STATUS_FIELD_ID=$READY_FIELD_ID
-else
-  STATUS_FIELD_ID=$BACKLOG_FIELD_ID
-fi
+# ProjectにIssueを追加（Project V2の場合）
+# まずProject IDとステータスフィールドIDを取得
+PROJECT_ID=$(gh project list --owner OWNER --limit 1 --json id --jq '.[0].id')
+READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Ready") | .id')
+STATUS_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.id')
 
+# ProjectにIssueを追加し、ステータスをReadyに設定
 gh project item-add $PROJECT_ID --owner OWNER --url "https://github.com/OWNER/REPO/issues/$ISSUE_NUMBER"
+ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$ISSUE_NUMBER) | .id")
 gh api graphql -f query='
   mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
     updateProjectV2ItemFieldValue(
@@ -139,7 +119,7 @@ gh api graphql -f query='
         value: { singleSelectOptionId: $value }
       }
     ) { projectV2Item { id } }
-  }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$STATUS_FIELD_ID"
+  }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$READY_FIELD_ID"
 ```
 
 ### 2. タスクVerify（kairo-task-verify.md）
@@ -155,8 +135,7 @@ gh api graphql -f query='
   - コメント追加: 検証結果を記録
   - ラベル追加: `verified`（検証完了時）
 - GitHub Projectを更新
-  - 検証完了時: ステータスを`Ready`に更新（依存タスクが完了している場合）
-  - 依存タスクが未完了の場合: ステータスは`Backlog`のまま
+  - 検証完了時: ステータスは`Ready`のまま（依存関係はRelationshipsで管理されるため）
 
 **gh cli操作**:
 ```bash
@@ -169,61 +148,7 @@ gh issue comment $ISSUE_NUMBER --body "✅ タスク検証完了
 # Issueラベル追加
 gh issue edit $ISSUE_NUMBER --add-label "verified"
 
-# 依存タスクの完了状況を再確認
-DEPENDENCIES_COMPLETE=true
-for dep_task in TASK-0000 TASK-0001; do
-  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number --jq '.[0]')
-  if [ -z "$DEP_ISSUE" ] || [ "$DEP_ISSUE" = "null" ]; then
-    DEPENDENCIES_COMPLETE=false
-    break
-  fi
-  DEP_ISSUE_NUM=$(echo $DEP_ISSUE | jq -r '.number')
-  
-  # 依存タスクのProjectステータスを確認（In ReviewまたはDoneであれば完了とみなす）
-  DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_ISSUE_NUM) | .id")
-  if [ -z "$DEP_ITEM_ID" ] || [ "$DEP_ITEM_ID" = "null" ]; then
-    DEPENDENCIES_COMPLETE=false
-    break
-  fi
-  
-  # ProjectステータスをGraphQL APIで取得
-  DEP_STATUS=$(gh api graphql -f query='
-    query($project:ID!, $item:ID!) {
-      node(id: $project) {
-        ... on ProjectV2 {
-          item(id: $item) {
-            fieldValueByName(name: "Status") {
-              ... on ProjectV2ItemFieldSingleSelectValue {
-                name
-              }
-            }
-          }
-        }
-      }
-    }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" --jq '.data.node.item.fieldValueByName.name' 2>/dev/null || echo "")
-  
-  # In ReviewまたはDoneステータスの場合のみ完了とみなす
-  if [ "$DEP_STATUS" != "In Review" ] && [ "$DEP_STATUS" != "Done" ]; then
-    DEPENDENCIES_COMPLETE=false
-    break
-  fi
-done
-
-# Projectステータス更新（依存タスクが完了している場合のみReadyに更新）
-if [ "$DEPENDENCIES_COMPLETE" = "true" ]; then
-  READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Ready") | .id')
-  gh api graphql -f query='
-    mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
-      updateProjectV2ItemFieldValue(
-        input: {
-          projectId: $project
-          itemId: $item
-          fieldId: $field
-          value: { singleSelectOptionId: $value }
-        }
-      ) { projectV2Item { id } }
-    }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$READY_FIELD_ID"
-fi
+# ProjectステータスはReadyのまま（依存関係はRelationshipsで管理されるため、変更不要）
 ```
 
 ### 3. タスク実装（kairo-implement.md, tdd-*.md, direct-setup.md）
@@ -288,7 +213,7 @@ gh issue comment $ISSUE_NUMBER --body "✅ tdd-requirements完了
   - ラベル追加: `implementation-complete`（検証完了時）
 - GitHub Projectを更新
   - ステータス: `In Progress` → `In Review`
-  - 依存関係を確認し、依存タスクが全て完了している場合は次のタスクを自動的に`Ready`に更新
+  - 依存関係はRelationshipsで管理されるため、依存関係チェックは不要
 
 **gh cli操作**:
 ```bash
@@ -359,76 +284,7 @@ gh api graphql -f query='
     ) { projectV2Item { id } }
   }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$IN_REVIEW_FIELD_ID"
 
-# 依存タスクの確認と更新
-# このタスクに依存している他のタスクを検索
-DEPENDENT_ISSUES=$(gh issue list --search "TASK-0002" --json number,title,state --jq '.[] | select(.state != "CLOSED")')
-
-# 各依存タスクについて、その依存タスクが全て完了しているか確認
-for dep_issue in $DEPENDENT_ISSUES; do
-  DEP_ISSUE_NUM=$(echo $dep_issue | jq -r '.number')
-  # 依存タスクの依存関係を確認（Issue本文から取得）
-  DEP_DEPS=$(gh issue view $DEP_ISSUE_NUM --json body --jq '.body' | grep -oP '依存: \K[^\\n]*')
-  
-  ALL_DEPS_COMPLETE=true
-  for dep_task_id in $DEP_DEPS; do
-    # 依存タスクのIssue番号を取得
-    DEP_TASK_ISSUE=$(gh issue list --search "$dep_task_id" --json number --jq '.[0]')
-    if [ -z "$DEP_TASK_ISSUE" ] || [ "$DEP_TASK_ISSUE" = "null" ]; then
-      ALL_DEPS_COMPLETE=false
-      break
-    fi
-    DEP_TASK_ISSUE_NUM=$(echo $DEP_TASK_ISSUE | jq -r '.number')
-    
-    # 依存タスクのProjectステータスを確認（In ReviewまたはDoneであれば完了とみなす）
-    DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_TASK_ISSUE_NUM) | .id")
-    if [ -z "$DEP_ITEM_ID" ] || [ "$DEP_ITEM_ID" = "null" ]; then
-      ALL_DEPS_COMPLETE=false
-      break
-    fi
-    
-    # ProjectステータスをGraphQL APIで取得
-    DEP_STATUS=$(gh api graphql -f query='
-      query($project:ID!, $item:ID!) {
-        node(id: $project) {
-          ... on ProjectV2 {
-            item(id: $item) {
-              fieldValueByName(name: "Status") {
-                ... on ProjectV2ItemFieldSingleSelectValue {
-                  name
-                }
-              }
-            }
-          }
-        }
-      }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" --jq '.data.node.item.fieldValueByName.name' 2>/dev/null || echo "")
-    
-    # In ReviewまたはDoneステータスの場合のみ完了とみなす
-    if [ "$DEP_STATUS" != "In Review" ] && [ "$DEP_STATUS" != "Done" ]; then
-      ALL_DEPS_COMPLETE=false
-      break
-    fi
-  done
-  
-  # 依存タスクが全て完了している場合、Readyに更新
-  if [ "$ALL_DEPS_COMPLETE" = "true" ]; then
-    READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Ready") | .id')
-    DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_ISSUE_NUM) | .id")
-    gh api graphql -f query='
-      mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
-        updateProjectV2ItemFieldValue(
-          input: {
-            projectId: $project
-            itemId: $item
-            fieldId: $field
-            value: { singleSelectOptionId: $value }
-          }
-        ) { projectV2Item { id } }
-      }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$READY_FIELD_ID"
-    
-    # コメントを追加
-    gh issue comment $DEP_ISSUE_NUM --body "✅ 依存タスクが完了しました。実装準備が整いました。"
-  fi
-done
+# 依存関係はRelationshipsで管理されるため、依存関係チェックは不要
 ```
 
 ## 依存関係の管理
@@ -436,27 +292,23 @@ done
 ### 依存関係の表現
 
 - タスクファイル内で依存関係を定義: `依存: TASK-0001, TASK-0002`
-- GitHub Issueで依存関係を表現:
-  - Issue本文に依存タスクへのリンクを記載
-  - GitHub Projectの依存関係機能を使用
-  - または、Issueの本文に依存関係セクションを追加
+- GitHub IssueのRelationships機能を使用:
+  - Issue作成時に依存タスクとの`depends on`関係を設定
+  - GitHubが自動的に依存関係を管理し、依存タスクが完了するまでブロックを表示
 
 ### 依存関係の確認フロー
 
 1. **タスク作成時**:
-   - 依存タスクのIssue番号を取得
-   - Issue本文に依存タスクへのリンクを追加
-   - Projectで依存関係を設定
+   - 依存タスクのIssue IDを取得
+   - IssueのRelationshipsで`depends on`関係を設定
+   - Projectステータスは常に`Ready`に設定（依存関係はRelationshipsで管理）
 
 2. **タスク実装開始前**:
-   - 依存タスクのIssueステータスを確認
-   - 全ての依存タスクが`closed`であることを確認
-   - 未完了の依存タスクがある場合は警告を表示
+   - GitHubのRelationships機能が自動的に依存タスクの完了状況を管理
+   - 依存タスクが完了していない場合、GitHubが自動的にブロックを表示
 
 3. **タスク実装完了時**:
-   - 依存タスクとして設定されているIssueを確認
-   - 依存タスクが全て完了している場合、次のタスクのIssueにコメントを追加
-   - 次のタスクを`Ready for Implementation`に更新
+   - 依存関係チェックは不要（Relationshipsで自動管理されるため）
 
 ## SubAgentの使用
 
@@ -564,7 +416,6 @@ export GH_REPO=owner/repo
     "phase2": "Phase 2"
   },
   "projectStatus": {
-    "backlog": "Backlog",
     "ready": "Ready",
     "inProgress": "In Progress",
     "inReview": "In Review",
@@ -578,39 +429,31 @@ export GH_REPO=owner/repo
 ```mermaid
 flowchart TD
     A[kairo-tasks: タスク作成] --> B[GitHub Issue作成]
-    B --> C{依存タスク完了?}
-    C -->|Yes| D[Project: Ready]
-    C -->|No| E[Project: Backlog]
-    D --> F[kairo-task-verify: タスクVerify]
-    E --> F
+    B --> C[Issue Relationships設定]
+    C --> D[Project: Ready]
+    D --> E[kairo-task-verify: タスクVerify]
     
-    F --> G{検証OK?}
-    G -->|No| F
-    G -->|Yes| H[Issue: verifiedラベル追加]
-    H --> I{依存タスク完了?}
-    I -->|Yes| J[Project: Ready]
-    I -->|No| K[Project: Backlogのまま]
+    E --> F{検証OK?}
+    F -->|No| E
+    F -->|Yes| G[Issue: verifiedラベル追加]
+    G --> H[Project: Readyのまま]
     
-    J --> L[kairo-implement: タスク実装開始]
-    L --> M[Project: In Progress]
-    M --> N[実装ステップ実行]
-    N --> O[各ステップでIssueコメント追加]
-    O --> P{実装完了?}
-    P -->|No| N
-    P -->|Yes| Q[tdd-verify-complete/direct-verify: 実装Verify]
+    H --> I[kairo-implement: タスク実装開始]
+    I --> J[Project: In Progress]
+    J --> K[実装ステップ実行]
+    K --> L[各ステップでIssueコメント追加]
+    L --> M{実装完了?}
+    M -->|No| K
+    M -->|Yes| N[tdd-verify-complete/direct-verify: 実装Verify]
     
-    Q --> R{検証OK?}
-    R -->|No| L
-    R -->|Yes| S[ブランチ作成]
-    S --> T[コミット＆Push]
-    T --> U[プルリク作成]
-    U --> V[Issue: implementation-completeラベル]
-    V --> W[Project: In Review]
-    W --> X[依存タスク確認]
-    X --> Y{次のタスク準備OK?}
-    Y -->|Yes| Z[次のタスクをReadyに更新]
-    Y -->|No| AA[完了]
-    Z --> AA
+    N --> O{検証OK?}
+    O -->|No| I
+    O -->|Yes| P[ブランチ作成]
+    P --> Q[コミット＆Push]
+    Q --> R[プルリク作成]
+    R --> S[Issue: implementation-completeラベル]
+    S --> T[Project: In Review]
+    T --> U[完了]
 ```
 
 ## 注意事項
