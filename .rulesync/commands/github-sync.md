@@ -25,6 +25,7 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
   - `add_label`: Issueにラベルを追加
   - `update_status`: Projectのステータスを更新
   - `close_issue`: Issueをクローズし、ProjectステータスをDoneに更新
+  - `create_pr`: ブランチ作成、コミット＆Push、プルリク作成、ステータスをIn Reviewに更新
   - `check_dependencies`: 依存タスクの完了状況を確認し、次のタスクをReadyに更新
 - **issue_number** (オプション): GitHub Issue番号（例: `123`）
 - **task_id** (オプション): タスクID（例: `TASK-0001`）
@@ -33,7 +34,7 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
 - **labels** (オプション): ラベル（カンマ区切り、例: `task,tdd,phase1`）
 - **milestone** (オプション): マイルストーン名
 - **comment** (オプション): コメント内容
-- **status** (オプション): Projectステータス（`Backlog`, `Ready`, `In Progress`, `In Review`, `Done`）
+- **status** (オプション): Projectステータス（`Ready`, `In Progress`, `In Review`, `Done`）
 - **dependencies** (オプション): 依存タスクIDのリスト（カンマ区切り、例: `TASK-0001,TASK-0002`）
 
 ## 実行内容
@@ -57,10 +58,11 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
      - 本文: task_bodyまたはタスク情報から生成
      - ラベル: labelsまたはデフォルトラベル
      - マイルストーン: milestone（指定がある場合）
+   - Issue IDを取得
+   - IssueのRelationshipsを設定（依存タスクとの`depends on`関係）
    - Project IDを取得
-   - 依存タスクの完了状況を確認
    - ProjectにIssueを追加
-   - ステータスを設定（依存タスクが全て完了: `Ready`、未完了: `Backlog`）
+   - ステータスを`Ready`に設定（依存関係はRelationshipsで管理されるため、常にReady）
    - Issue番号を返す
 
    ### add_comment: Issueにコメント追加
@@ -92,8 +94,28 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
    - Projectステータスを`Done`に更新
    - 成功/失敗を返す
 
-   ### check_dependencies: 依存タスク確認と更新
+   ### create_pr: ブランチ作成、コミット＆Push、プルリク作成、ステータス更新
 
+   - issue_numberが指定されていることを確認
+   - task_idまたはissue_numberからブランチ名を生成（例: `task/TASK-0001` または `task/issue-123`）
+   - 現在のブランチを確認（mainまたはmasterであることを確認）
+   - 新しいブランチを作成してチェックアウト
+   - 変更されたファイルをステージング
+   - コミットメッセージを生成（検証結果のコメントを含む）
+   - コミットを実行
+   - ブランチをPush
+   - プルリクエストを作成
+     - タイトル: `[TASK-{4桁番号}] {タスク名}` または Issueタイトルを使用
+     - 本文: 検証結果のコメントを含む
+     - Issueとリンク（`Closes #123`または`Fixes #123`）
+   - Issueにコメントを追加（検証結果など）
+   - `implementation-complete`ラベルを追加
+   - Projectステータスを`In Review`に更新
+   - プルリクエスト番号を返す
+
+   ### check_dependencies: 依存タスク確認と更新（非推奨）
+
+   - **注意**: 依存関係はGitHub IssueのRelationships機能で自動管理されるため、このアクションは非推奨です
    - issue_numberが指定されていることを確認
    - このタスクに依存している他のタスクを検索
    - 各依存タスクについて、依存タスクが全て完了しているか確認
@@ -139,6 +161,16 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
 @task general-purpose /github-sync \
   --action close_issue \
   --issue_number 123 \
+  --comment "✅ 実装検証完了\n- テスト: 25/25 (100%)\n- カバレッジ: 95%"
+```
+
+### プルリクエスト作成
+
+```bash
+@task general-purpose /github-sync \
+  --action create_pr \
+  --issue_number 123 \
+  --task_id TASK-0001 \
   --comment "✅ 実装検証完了\n- テスト: 25/25 (100%)\n- カバレッジ: 95%"
 ```
 
