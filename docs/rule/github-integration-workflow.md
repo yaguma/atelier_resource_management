@@ -215,33 +215,77 @@ gh issue comment $ISSUE_NUMBER --body "✅ tdd-requirements完了
   - テスト結果の確認
   - コードカバレッジの確認
   - コードレビューの実施（必要に応じて）
+- ブランチ作成、コミット＆Push、プルリク作成
+  - タスク用のブランチを作成（例: `task/TASK-0001`）
+  - 変更をコミット
+  - ブランチをPush
+  - プルリクエストを作成（Issueとリンク）
 - GitHub Issueを更新
   - コメント追加: 検証結果を記録
     - テスト結果サマリー
     - コードカバレッジ
     - 作成ファイル一覧
   - ラベル追加: `implementation-complete`（検証完了時）
-  - Issueをクローズ: 実装完了時
 - GitHub Projectを更新
-  - ステータス: `In Progress` → `Done`
+  - ステータス: `In Progress` → `In Review`
   - 依存関係を確認し、依存タスクが全て完了している場合は次のタスクを自動的に`Ready`に更新
 
 **gh cli操作**:
 ```bash
-# 検証結果コメント
+# ブランチ名を生成（task_idまたはissue_numberから）
+BRANCH_NAME="task/TASK-0001"  # または "task/issue-123"
+
+# 現在のブランチを確認（mainまたはmasterであることを確認）
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
+  echo "警告: 現在のブランチがmain/masterではありません"
+fi
+
+# 新しいブランチを作成してチェックアウト
+git checkout -b $BRANCH_NAME
+
+# 変更されたファイルをステージング
+git add .
+
+# コミットメッセージを生成
+COMMIT_MESSAGE="✅ 実装検証完了
+- テスト: 25/25 (100%)
+- カバレッジ: 95%
+- 所要時間: 3時間45分
+
+Closes #$ISSUE_NUMBER"
+
+# コミットを実行
+git commit -m "$COMMIT_MESSAGE"
+
+# ブランチをPush
+git push -u origin $BRANCH_NAME
+
+# プルリクエストを作成
+PR_NUMBER=$(gh pr create \
+  --title "[TASK-0001] タスク名" \
+  --body "✅ 実装検証完了
+- テスト: 25/25 (100%)
+- カバレッジ: 95%
+- 所要時間: 3時間45分
+
+Closes #$ISSUE_NUMBER" \
+  --base main \
+  --head $BRANCH_NAME \
+  --json number --jq '.number')
+
+# Issueにコメントを追加
 gh issue comment $ISSUE_NUMBER --body "✅ 実装検証完了
 - テスト: 25/25 (100%)
 - カバレッジ: 95%
-- 所要時間: 3時間45分"
+- 所要時間: 3時間45分
+- プルリクエスト: #$PR_NUMBER"
 
 # Issueラベル追加
 gh issue edit $ISSUE_NUMBER --add-label "implementation-complete"
 
-# Issueクローズ
-gh issue close $ISSUE_NUMBER
-
-# ProjectステータスをDoneに更新
-DONE_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="Done") | .id')
+# ProjectステータスをIn Reviewに更新
+IN_REVIEW_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options[] | select(.name=="In Review") | .id')
 gh api graphql -f query='
   mutation($project:ID!, $item:ID!, $field:ID!, $value:ID!) {
     updateProjectV2ItemFieldValue(
@@ -252,7 +296,7 @@ gh api graphql -f query='
         value: { singleSelectOptionId: $value }
       }
     ) { projectV2Item { id } }
-  }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$DONE_FIELD_ID"
+  }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$STATUS_FIELD_ID" -f value="$IN_REVIEW_FIELD_ID"
 
 # 依存タスクの確認と更新
 # このタスクに依存している他のタスクを検索
@@ -465,14 +509,16 @@ flowchart TD
     
     Q --> R{検証OK?}
     R -->|No| L
-    R -->|Yes| S[Issue: implementation-completeラベル]
-    S --> T[Issueクローズ]
-    T --> U[Project: Done]
-    U --> V[依存タスク確認]
-    V --> W{次のタスク準備OK?}
-    W -->|Yes| X[次のタスクをReadyに更新]
-    W -->|No| Y[完了]
-    X --> Y
+    R -->|Yes| S[ブランチ作成]
+    S --> T[コミット＆Push]
+    T --> U[プルリク作成]
+    U --> V[Issue: implementation-completeラベル]
+    V --> W[Project: In Review]
+    W --> X[依存タスク確認]
+    X --> Y{次のタスク準備OK?}
+    Y -->|Yes| Z[次のタスクをReadyに更新]
+    Y -->|No| AA[完了]
+    Z --> AA
 ```
 
 ## 注意事項
