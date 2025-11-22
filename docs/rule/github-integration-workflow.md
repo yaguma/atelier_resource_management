@@ -84,8 +84,38 @@ READY_FIELD_ID=$(gh project view $PROJECT_ID --json status --jq '.status.options
 # 依存タスクの完了状況を確認
 DEPENDENCIES_COMPLETE=true
 for dep_task in TASK-0000 TASK-0001; do
-  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number,state --jq '.[0]')
-  if [ "$(echo $DEP_ISSUE | jq -r '.state')" != "CLOSED" ]; then
+  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number --jq '.[0]')
+  if [ -z "$DEP_ISSUE" ] || [ "$DEP_ISSUE" = "null" ]; then
+    DEPENDENCIES_COMPLETE=false
+    break
+  fi
+  DEP_ISSUE_NUM=$(echo $DEP_ISSUE | jq -r '.number')
+  
+  # 依存タスクのProjectステータスを確認（In ReviewまたはDoneであれば完了とみなす）
+  DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_ISSUE_NUM) | .id")
+  if [ -z "$DEP_ITEM_ID" ] || [ "$DEP_ITEM_ID" = "null" ]; then
+    DEPENDENCIES_COMPLETE=false
+    break
+  fi
+  
+  # ProjectステータスをGraphQL APIで取得
+  DEP_STATUS=$(gh api graphql -f query='
+    query($project:ID!, $item:ID!) {
+      node(id: $project) {
+        ... on ProjectV2 {
+          item(id: $item) {
+            fieldValueByName(name: "Status") {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+            }
+          }
+        }
+      }
+    }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" --jq '.data.node.item.fieldValueByName.name' 2>/dev/null || echo "")
+  
+  # In ReviewまたはDoneステータスの場合のみ完了とみなす
+  if [ "$DEP_STATUS" != "In Review" ] && [ "$DEP_STATUS" != "Done" ]; then
     DEPENDENCIES_COMPLETE=false
     break
   fi
@@ -142,8 +172,38 @@ gh issue edit $ISSUE_NUMBER --add-label "verified"
 # 依存タスクの完了状況を再確認
 DEPENDENCIES_COMPLETE=true
 for dep_task in TASK-0000 TASK-0001; do
-  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number,state --jq '.[0]')
-  if [ "$(echo $DEP_ISSUE | jq -r '.state')" != "CLOSED" ]; then
+  DEP_ISSUE=$(gh issue list --search "$dep_task" --json number --jq '.[0]')
+  if [ -z "$DEP_ISSUE" ] || [ "$DEP_ISSUE" = "null" ]; then
+    DEPENDENCIES_COMPLETE=false
+    break
+  fi
+  DEP_ISSUE_NUM=$(echo $DEP_ISSUE | jq -r '.number')
+  
+  # 依存タスクのProjectステータスを確認（In ReviewまたはDoneであれば完了とみなす）
+  DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_ISSUE_NUM) | .id")
+  if [ -z "$DEP_ITEM_ID" ] || [ "$DEP_ITEM_ID" = "null" ]; then
+    DEPENDENCIES_COMPLETE=false
+    break
+  fi
+  
+  # ProjectステータスをGraphQL APIで取得
+  DEP_STATUS=$(gh api graphql -f query='
+    query($project:ID!, $item:ID!) {
+      node(id: $project) {
+        ... on ProjectV2 {
+          item(id: $item) {
+            fieldValueByName(name: "Status") {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+            }
+          }
+        }
+      }
+    }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" --jq '.data.node.item.fieldValueByName.name' 2>/dev/null || echo "")
+  
+  # In ReviewまたはDoneステータスの場合のみ完了とみなす
+  if [ "$DEP_STATUS" != "In Review" ] && [ "$DEP_STATUS" != "Done" ]; then
     DEPENDENCIES_COMPLETE=false
     break
   fi
@@ -238,7 +298,8 @@ BRANCH_NAME="task/TASK-0001"  # または "task/issue-123"
 # 現在のブランチを確認（mainまたはmasterであることを確認）
 CURRENT_BRANCH=$(git branch --show-current)
 if [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
-  echo "警告: 現在のブランチがmain/masterではありません"
+  echo "エラー: 現在のブランチがmain/masterではありません。正しいベースブランチに切り替えてください。"
+  exit 1
 fi
 
 # 新しいブランチを作成してチェックアウト
@@ -270,7 +331,7 @@ PR_NUMBER=$(gh pr create \
 - 所要時間: 3時間45分
 
 Closes #$ISSUE_NUMBER" \
-  --base main \
+  --base $CURRENT_BRANCH \
   --head $BRANCH_NAME \
   --json number --jq '.number')
 
@@ -310,8 +371,39 @@ for dep_issue in $DEPENDENT_ISSUES; do
   
   ALL_DEPS_COMPLETE=true
   for dep_task_id in $DEP_DEPS; do
-    DEP_TASK_ISSUE=$(gh issue list --search "$dep_task_id" --json number,state --jq '.[0]')
-    if [ "$(echo $DEP_TASK_ISSUE | jq -r '.state')" != "CLOSED" ]; then
+    # 依存タスクのIssue番号を取得
+    DEP_TASK_ISSUE=$(gh issue list --search "$dep_task_id" --json number --jq '.[0]')
+    if [ -z "$DEP_TASK_ISSUE" ] || [ "$DEP_TASK_ISSUE" = "null" ]; then
+      ALL_DEPS_COMPLETE=false
+      break
+    fi
+    DEP_TASK_ISSUE_NUM=$(echo $DEP_TASK_ISSUE | jq -r '.number')
+    
+    # 依存タスクのProjectステータスを確認（In ReviewまたはDoneであれば完了とみなす）
+    DEP_ITEM_ID=$(gh project item-list $PROJECT_ID --owner OWNER --format json | jq -r ".[] | select(.content.number==$DEP_TASK_ISSUE_NUM) | .id")
+    if [ -z "$DEP_ITEM_ID" ] || [ "$DEP_ITEM_ID" = "null" ]; then
+      ALL_DEPS_COMPLETE=false
+      break
+    fi
+    
+    # ProjectステータスをGraphQL APIで取得
+    DEP_STATUS=$(gh api graphql -f query='
+      query($project:ID!, $item:ID!) {
+        node(id: $project) {
+          ... on ProjectV2 {
+            item(id: $item) {
+              fieldValueByName(name: "Status") {
+                ... on ProjectV2ItemFieldSingleSelectValue {
+                  name
+                }
+              }
+            }
+          }
+        }
+      }' -f project="$PROJECT_ID" -f item="$DEP_ITEM_ID" --jq '.data.node.item.fieldValueByName.name' 2>/dev/null || echo "")
+    
+    # In ReviewまたはDoneステータスの場合のみ完了とみなす
+    if [ "$DEP_STATUS" != "In Review" ] && [ "$DEP_STATUS" != "Done" ]; then
       ALL_DEPS_COMPLETE=false
       break
     fi
