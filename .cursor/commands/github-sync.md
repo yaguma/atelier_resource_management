@@ -27,7 +27,7 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
 - **labels** (オプション): ラベル（カンマ区切り、例: `task,tdd,phase1`）
 - **milestone** (オプション): マイルストーン名
 - **comment** (オプション): コメント内容
-- **status** (オプション): Projectステータス（`Backlog`, `Ready`, `In Progress`, `In Review`, `Done`）
+- **status** (オプション): Projectステータス（`Ready`, `In Progress`, `In Review`, `Done`）
 - **dependencies** (オプション): 依存タスクIDのリスト（カンマ区切り、例: `TASK-0001,TASK-0002`）
 
 ## 実行内容
@@ -51,10 +51,11 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
      - 本文: task_bodyまたはタスク情報から生成
      - ラベル: labelsまたはデフォルトラベル
      - マイルストーン: milestone（指定がある場合）
+   - Issue IDを取得
+   - IssueのRelationshipsを設定（依存タスクとの`depends on`関係）
    - Project IDを取得
-   - 依存タスクの完了状況を確認
    - ProjectにIssueを追加
-   - ステータスを設定（依存タスクが全て完了: `Ready`、未完了: `Backlog`）
+   - ステータスを`Ready`に設定（依存関係はRelationshipsで管理されるため、常にReady）
    - Issue番号を返す
 
    ### add_comment: Issueにコメント追加
@@ -105,8 +106,9 @@ GitHub Issue/Project連携を実行するSubAgent。`gh cli`を使用してGitHu
    - Projectステータスを`In Review`に更新
    - プルリクエスト番号を返す
 
-   ### check_dependencies: 依存タスク確認と更新
+   ### check_dependencies: 依存タスク確認と更新（非推奨）
 
+   - **注意**: 依存関係はGitHub IssueのRelationships機能で自動管理されるため、このアクションは非推奨です
    - issue_numberが指定されていることを確認
    - このタスクに依存している他のタスクを検索
    - 各依存タスクについて、依存タスクが全て完了しているか確認

@@ -81,7 +81,7 @@ description: 作成されたタスクファイルの内容を確認し、出力�
    - Issue番号が取得できない場合は警告を表示し、GitHub連携をスキップ
    - 検証結果をコメントとして追加: `@task general-purpose /github-sync --action add_comment --issue_number {issue_number} --comment "✅ タスク検証完了\n- 要件定義: 確認済み\n- 依存関係: 確認済み"`
    - 検証完了時は`verified`ラベルを追加: `@task general-purpose /github-sync --action add_label --issue_number {issue_number} --labels "verified"`
-   - 依存タスクの完了状況を再確認し、ステータスを更新: `@task general-purpose /github-sync --action update_status --issue_number {issue_number} --status "Ready"`（依存タスクが全て完了している場合のみ）
+   - Projectステータスは`Ready`のまま（依存関係はRelationshipsで管理されるため、変更不要）
    - 詳細は `docs/rule/github-integration-workflow.md` を参照
 
 ## 実行後の確認

@@ -330,7 +330,7 @@ jq '.port = 3000' config.json > temp.json && mv temp.json config.json
 - 取得したIssue番号を使用（ステップ1で取得したIssue番号）
 - Issue番号が取得できない場合は警告を表示し、GitHub連携をスキップ
 - ブランチ作成、コミット＆Push、プルリク作成、ステータス更新: `@task general-purpose /github-sync --action create_pr --issue_number {issue_number} --task_id {task_id} --comment "✅ 実装検証完了\n- 設定確認: 完了\n- 動作テスト: 完了\n- 品質チェック: 完了"`
-- 依存タスクの確認と更新: `@task general-purpose /github-sync --action check_dependencies --issue_number {issue_number}`
+- 依存関係はRelationshipsで自動管理されるため、依存タスクの確認は不要
 - 詳細は `docs/rule/github-integration-workflow.md` を参照
 
 ### 完了条件
