@@ -247,7 +247,7 @@ TDD開発でテストケースの実装が完全に完了しているかを検�
 **GitHub Issue/Project連携**:
 - 取得したIssue番号を使用（ステップ2で取得したIssue番号）
 - Issue番号が取得できない場合は警告を表示し、GitHub連携をスキップ
-- IssueクローズとProject更新: `@task general-purpose /github-sync --action close_issue --issue_number {issue_number} --comment "✅ 実装検証完了\n- テスト: {passed}/{total}\n- カバレッジ: {coverage}%\n- 所要時間: {time}"`
+- ブランチ作成、コミット＆Push、プルリク作成、ステータス更新: `@task general-purpose /github-sync --action create_pr --issue_number {issue_number} --task_id {task_id} --comment "✅ 実装検証完了\n- テスト: {passed}/{total}\n- カバレッジ: {coverage}%\n- 所要時間: {time}"`
 - 依存タスクの確認と更新: `@task general-purpose /github-sync --action check_dependencies --issue_number {issue_number}`
 - 詳細は `docs/rule/github-integration-workflow.md` を参照
 
