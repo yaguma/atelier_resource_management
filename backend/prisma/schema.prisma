@@ -1,0 +1,94 @@
+// ============================================================================
+// Prismaスキーマ定義: Cardテーブル
+// ============================================================================
+// TASK-0012: Prismaスキーマ定義（Cardテーブル）
+// GitHub Issue: #39
+// 
+// 要件定義:
+// - WRREQ-012: 6種類のカード系統を管理
+// - WRREQ-013: 各カードは名前、説明、カード系統、属性値、安定値、反応効果を持つ
+// - WRREQ-014: 各カードはエネルギーコスト(0〜5)を持つ
+// - WRREQ-015: システムはカードの進化・合成ルールを定義できる
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUM型定義
+// ============================================================================
+
+// カード系統型（WRREQ-012）
+// 6種類のカード系統: 素材、操作、触媒、知識、特殊、アーティファクト
+enum CardType {
+  MATERIAL    // 素材カード
+  OPERATION   // 操作カード
+  CATALYST    // 触媒カード
+  KNOWLEDGE   // 知識カード
+  SPECIAL     // 特殊カード
+  ARTIFACT    // アーティファクト
+}
+
+// レア度型
+// 5段階のレア度: コモン、アンコモン、レア、エピック、レジェンダリー
+enum Rarity {
+  COMMON      // コモン
+  UNCOMMON    // アンコモン
+  RARE        // レア
+  EPIC        // エピック
+  LEGENDARY   // レジェンダリー
+}
+
+// ============================================================================
+// モデル定義
+// ============================================================================
+
+// Cardモデル: カード管理機能のデータベース基盤
+// 要件定義書（WRREQ-012, WRREQ-013, WRREQ-014, WRREQ-015）に基づいて定義
+model Card {
+  // 主キー
+  id            String    @id @default(uuid())
+
+  // 基本情報（WRREQ-013）
+  name          String    @db.VarChar(100) @unique  // カード名（最大100文字、ユニーク制約）
+  description   String    @db.VarChar(1000)        // 説明（最大1000文字）
+  cardType      CardType                           // カード系統（ENUM）
+  attribute     Json                               // 属性値（JSON形式、例: {"fire":5,"water":3}）
+
+  // ゲームパラメータ（WRREQ-013, WRREQ-014）
+  stabilityValue Int                                // 安定値（範囲: -100〜100、CHECK制約はマイグレーション時に追加）
+  reactionEffect String?  @db.VarChar(500)         // 反応効果（最大500文字、オプショナル）
+  energyCost    Int                                // エネルギーコスト（範囲: 0〜5、CHECK制約はマイグレーション時に追加）
+
+  // 表示情報
+  imageUrl      String?                            // 画像URL（オプショナル）
+  rarity        Rarity?                            // レア度（ENUM、オプショナル）
+
+  // 進化・合成システム（WRREQ-015）
+  evolutionFromId String? @db.Uuid                 // 進化元カードID（オプショナル、FOREIGN KEY）
+  evolutionFrom Card?     @relation("CardEvolution", fields: [evolutionFromId], references: [id], onDelete: SetNull)
+  evolutionTo   Card[]    @relation("CardEvolution")  // 進化先カード（1:Nリレーション）
+
+  // 共通フィールド（ソフトデリート対応）
+  createdAt     DateTime  @default(now())          // 作成日時（自動設定）
+  updatedAt     DateTime  @updatedAt               // 更新日時（自動更新）
+  deletedAt     DateTime?                         // 削除日時（ソフトデリート用、オプショナル）
+
+  // インデックス定義（検索・フィルタリング性能向上のため）
+  @@index([name])              // カード名検索用
+  @@index([cardType])          // カード系統フィルタリング用
+  @@index([rarity])            // レア度フィルタリング用
+  @@index([energyCost])        // エネルギーコストフィルタリング用
+  @@index([evolutionFromId])  // 進化元カード検索用
+  @@index([deletedAt])         // ソフトデリート用（WHERE deletedAt IS NULL）
+
+  // テーブル名マッピング（スネークケース）
+  @@map("cards")
+}
+
