@@ -144,3 +144,53 @@ model Card {
   @@map("cards")
 }
 
+// ============================================================================
+// TASK-0013: Prismaスキーマ定義（Customerテーブル）
+// GitHub Issue: #40
+//
+// 要件定義:
+// - WRREQ-021: システムは顧客タイプの管理機能を提供
+// - WRREQ-022: 各顧客は名前、説明、タイプ、難易度(1〜5星)を持つ
+// - WRREQ-023: 各顧客依頼は指定属性値、品質条件、安定性条件を持つ
+// - WRREQ-024: 各顧客は報酬設定(カード、名声、知識ポイント)を持つ
+// ============================================================================
+
+// Customerモデル: 顧客管理機能のデータベース基盤
+// 要件定義書（WRREQ-021, WRREQ-022, WRREQ-023, WRREQ-024）に基づいて定義
+model Customer {
+  // 主キー
+  id                  String    @id @default(uuid())
+
+  // 基本情報（WRREQ-022）
+  name                String    @db.VarChar(100)          // 顧客名（最大100文字）
+  description         String    @db.VarChar(1000)         // 説明（最大1000文字）
+  customerType        String    @db.VarChar(50)           // 顧客タイプ（最大50文字）
+  difficulty          Int                                  // 難易度（範囲: 1〜5、CHECK制約はマイグレーション時に追加）
+
+  // 依頼条件（WRREQ-023）
+  requiredAttribute   Json                                 // 必要属性値（JSON形式、例: {"fire":5,"water":3}）
+  qualityCondition    Int                                  // 品質条件（範囲: 0〜100、CHECK制約はマイグレーション時に追加）
+  stabilityCondition  Int                                  // 安定性条件（範囲: 0〜100、CHECK制約はマイグレーション時に追加）
+
+  // 報酬設定（WRREQ-024）
+  rewardFame          Int                                  // 報酬: 名声（範囲: 0〜1000、CHECK制約はマイグレーション時に追加）
+  rewardKnowledge     Int                                  // 報酬: 知識ポイント（範囲: 0〜1000、CHECK制約はマイグレーション時に追加）
+
+  // 表示情報
+  portraitUrl         String?                              // ポートレートURL（オプショナル）
+
+  // 共通フィールド（ソフトデリート対応）
+  createdAt           DateTime  @default(now())           // 作成日時（自動設定）
+  updatedAt           DateTime  @updatedAt                // 更新日時（自動更新）
+  deletedAt           DateTime?                            // 削除日時（ソフトデリート用、オプショナル）
+
+  // インデックス定義（検索・フィルタリング性能向上のため）
+  @@index([name])               // 顧客名検索用
+  @@index([customerType])       // 顧客タイプフィルタリング用
+  @@index([difficulty])         // 難易度フィルタリング用
+  @@index([deletedAt])          // ソフトデリート用（WHERE deletedAt IS NULL）
+
+  // テーブル名マッピング（スネークケース）
+  @@map("customers")
+}
+
